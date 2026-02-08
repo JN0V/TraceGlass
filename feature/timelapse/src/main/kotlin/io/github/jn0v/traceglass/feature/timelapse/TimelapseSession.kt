@@ -46,6 +46,12 @@ class TimelapseSession(
         _snapshotCount.value = 0
     }
 
+    fun restoreFromExisting(existingCount: Int, scope: CoroutineScope) {
+        if (existingCount <= 0) return
+        _snapshotCount.value = existingCount
+        _state.value = TimelapseState.PAUSED
+    }
+
     private fun startCaptureLoop(scope: CoroutineScope) {
         captureJob?.cancel()
         captureJob = scope.launch {
