@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import io.github.jn0v.traceglass.core.camera.FlashlightController
 import io.github.jn0v.traceglass.core.cv.MarkerResult
 import io.github.jn0v.traceglass.core.overlay.OverlayTransformCalculator
+import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
+import io.github.jn0v.traceglass.core.overlay.TrackingStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +18,8 @@ import kotlinx.coroutines.flow.update
 
 class TracingViewModel(
     private val flashlightController: FlashlightController,
-    private val transformCalculator: OverlayTransformCalculator = OverlayTransformCalculator()
+    private val transformCalculator: OverlayTransformCalculator = OverlayTransformCalculator(),
+    private val trackingStateManager: TrackingStateManager = TrackingStateManager()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -88,10 +91,11 @@ class TracingViewModel(
         frameWidth: Float = 1080f,
         frameHeight: Float = 1920f
     ) {
-        val trackingState = when {
-            result.isTracking -> TrackingState.TRACKING
-            _uiState.value.trackingState == TrackingState.INACTIVE -> TrackingState.INACTIVE
-            else -> TrackingState.LOST
+        val status = trackingStateManager.onMarkerResult(result)
+        val trackingState = when (status) {
+            TrackingStatus.INACTIVE -> TrackingState.INACTIVE
+            TrackingStatus.TRACKING -> TrackingState.TRACKING
+            TrackingStatus.LOST -> TrackingState.LOST
         }
 
         if (result.isTracking) {
