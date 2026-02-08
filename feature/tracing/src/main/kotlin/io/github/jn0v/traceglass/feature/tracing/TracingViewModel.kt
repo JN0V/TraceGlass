@@ -85,6 +85,7 @@ class TracingViewModel(
 
     fun onToggleSession() {
         _uiState.update { it.copy(isSessionActive = !it.isSessionActive) }
+        viewModelScope.launch { saveSession() }
     }
 
     fun onToggleControlsVisibility() {
