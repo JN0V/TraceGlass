@@ -2,6 +2,7 @@ package io.github.jn0v.traceglass.feature.tracing
 
 import android.Manifest
 import android.net.Uri
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -39,6 +41,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -98,6 +101,10 @@ fun TracingScreen(
                 overlayScale = uiState.overlayScale,
                 onOverlayDrag = viewModel::onOverlayDrag,
                 onOverlayScale = viewModel::onOverlayScale,
+                isSessionActive = uiState.isSessionActive,
+                areControlsVisible = uiState.areControlsVisible,
+                onToggleSession = viewModel::onToggleSession,
+                onToggleControlsVisibility = viewModel::onToggleControlsVisibility,
                 onPickImage = {
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -135,9 +142,26 @@ private fun CameraPreviewContent(
     overlayScale: Float,
     onOverlayDrag: (Offset) -> Unit,
     onOverlayScale: (Float) -> Unit,
+    isSessionActive: Boolean,
+    areControlsVisible: Boolean,
+    onToggleSession: () -> Unit,
+    onToggleControlsVisibility: () -> Unit,
     onPickImage: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+
+    DisposableEffect(isSessionActive) {
+        val window = (context as? android.app.Activity)?.window
+        if (isSessionActive) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -174,56 +198,82 @@ private fun CameraPreviewContent(
             )
         }
 
-        if (overlayImageUri != null) {
-            OpacityFab(
-                opacity = overlayOpacity,
-                isSliderVisible = isOpacitySliderVisible,
-                onToggleSlider = onToggleOpacitySlider,
-                onOpacityChanged = onOpacityChanged,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(16.dp)
-            )
-        }
+        if (areControlsVisible) {
+            if (overlayImageUri != null) {
+                OpacityFab(
+                    opacity = overlayOpacity,
+                    isSliderVisible = isOpacitySliderVisible,
+                    onToggleSlider = onToggleOpacitySlider,
+                    onOpacityChanged = onOpacityChanged,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(16.dp)
+                )
+            }
 
-        FloatingActionButton(
-            onClick = onPickImage,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .size(48.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Add,
-                contentDescription = "Pick reference image"
-            )
-        }
-
-        if (overlayImageUri != null) {
-            VisualModeControls(
-                colorTint = colorTint,
-                isInvertedMode = isInvertedMode,
-                onColorTintChanged = onColorTintChanged,
-                onToggleInvertedMode = onToggleInvertedMode,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(16.dp)
-            )
-        }
-
-        if (hasFlashlight) {
             FloatingActionButton(
-                onClick = onToggleTorch,
+                onClick = onPickImage,
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
+                    .align(Alignment.BottomEnd)
                     .padding(16.dp)
                     .size(48.dp)
             ) {
                 Icon(
-                    imageVector = if (isTorchOn) Icons.Filled.Info else Icons.Outlined.Info,
-                    contentDescription = if (isTorchOn) "Turn off flashlight" else "Turn on flashlight"
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Pick reference image"
                 )
             }
+
+            if (overlayImageUri != null) {
+                VisualModeControls(
+                    colorTint = colorTint,
+                    isInvertedMode = isInvertedMode,
+                    onColorTintChanged = onColorTintChanged,
+                    onToggleInvertedMode = onToggleInvertedMode,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(16.dp)
+                )
+
+                FloatingActionButton(
+                    onClick = onToggleSession,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp)
+                        .size(56.dp),
+                    containerColor = if (isSessionActive)
+                        MaterialTheme.colorScheme.error
+                    else
+                        MaterialTheme.colorScheme.primary
+                ) {
+                    Text(if (isSessionActive) "Stop" else "Start")
+                }
+            }
+
+            if (hasFlashlight) {
+                FloatingActionButton(
+                    onClick = onToggleTorch,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(16.dp)
+                        .size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isTorchOn) Icons.Filled.Info else Icons.Outlined.Info,
+                        contentDescription = if (isTorchOn) "Turn off flashlight" else "Turn on flashlight"
+                    )
+                }
+            }
+        }
+
+        if (!areControlsVisible) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures { onToggleControlsVisibility() }
+                    }
+            )
         }
     }
 

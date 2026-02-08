@@ -112,6 +112,51 @@ class TracingViewModelTest {
     }
 
     @Nested
+    inner class SessionControls {
+        @Test
+        fun `initial session is not active`() {
+            val viewModel = createViewModel()
+            assertFalse(viewModel.uiState.value.isSessionActive)
+        }
+
+        @Test
+        fun `onToggleSession starts session`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleSession()
+            assertTrue(viewModel.uiState.value.isSessionActive)
+        }
+
+        @Test
+        fun `onToggleSession twice stops session`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleSession()
+            viewModel.onToggleSession()
+            assertFalse(viewModel.uiState.value.isSessionActive)
+        }
+
+        @Test
+        fun `controls are visible by default`() {
+            val viewModel = createViewModel()
+            assertTrue(viewModel.uiState.value.areControlsVisible)
+        }
+
+        @Test
+        fun `onToggleControlsVisibility hides controls`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleControlsVisibility()
+            assertFalse(viewModel.uiState.value.areControlsVisible)
+        }
+
+        @Test
+        fun `onToggleControlsVisibility twice shows controls again`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleControlsVisibility()
+            viewModel.onToggleControlsVisibility()
+            assertTrue(viewModel.uiState.value.areControlsVisible)
+        }
+    }
+
+    @Nested
     inner class OverlayPositioning {
         @Test
         fun `initial overlay offset is zero`() {

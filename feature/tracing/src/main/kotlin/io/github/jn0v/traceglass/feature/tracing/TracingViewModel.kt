@@ -71,4 +71,12 @@ class TracingViewModel(
             it.copy(overlayScale = it.overlayScale * scaleFactor)
         }
     }
+
+    fun onToggleSession() {
+        _uiState.update { it.copy(isSessionActive = !it.isSessionActive) }
+    }
+
+    fun onToggleControlsVisibility() {
+        _uiState.update { it.copy(areControlsVisible = !it.areControlsVisible) }
+    }
 }
