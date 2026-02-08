@@ -34,9 +34,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -90,6 +94,10 @@ fun TracingScreen(
                 isInvertedMode = uiState.isInvertedMode,
                 onColorTintChanged = viewModel::onColorTintChanged,
                 onToggleInvertedMode = viewModel::onToggleInvertedMode,
+                overlayOffset = uiState.overlayOffset,
+                overlayScale = uiState.overlayScale,
+                onOverlayDrag = viewModel::onOverlayDrag,
+                onOverlayScale = viewModel::onOverlayScale,
                 onPickImage = {
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -123,6 +131,10 @@ private fun CameraPreviewContent(
     isInvertedMode: Boolean,
     onColorTintChanged: (ColorTint) -> Unit,
     onToggleInvertedMode: () -> Unit,
+    overlayOffset: Offset,
+    overlayScale: Float,
+    onOverlayDrag: (Offset) -> Unit,
+    onOverlayScale: (Float) -> Unit,
     onPickImage: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -144,7 +156,19 @@ private fun CameraPreviewContent(
                 contentDescription = "Overlay reference image",
                 modifier = Modifier
                     .fillMaxSize()
-                    .alpha(effectiveOpacity),
+                    .graphicsLayer {
+                        translationX = overlayOffset.x
+                        translationY = overlayOffset.y
+                        scaleX = overlayScale
+                        scaleY = overlayScale
+                    }
+                    .alpha(effectiveOpacity)
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            onOverlayDrag(pan)
+                            if (zoom != 1f) onOverlayScale(zoom)
+                        }
+                    },
                 contentScale = ContentScale.Fit,
                 colorFilter = colorTint.toColorFilter()
             )

@@ -1,6 +1,7 @@
 package io.github.jn0v.traceglass.feature.tracing
 
 import android.net.Uri
+import androidx.compose.ui.geometry.Offset
 import io.github.jn0v.traceglass.feature.tracing.FakeFlashlightController
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +108,51 @@ class TracingViewModelTest {
             viewModel.onImageSelected(uri1)
             viewModel.onImageSelected(uri2)
             assertEquals(uri2, viewModel.uiState.value.overlayImageUri)
+        }
+    }
+
+    @Nested
+    inner class OverlayPositioning {
+        @Test
+        fun `initial overlay offset is zero`() {
+            val viewModel = createViewModel()
+            assertEquals(Offset.Zero, viewModel.uiState.value.overlayOffset)
+        }
+
+        @Test
+        fun `initial overlay scale is 1`() {
+            val viewModel = createViewModel()
+            assertEquals(1f, viewModel.uiState.value.overlayScale)
+        }
+
+        @Test
+        fun `onOverlayDrag adds delta to offset`() {
+            val viewModel = createViewModel()
+            viewModel.onOverlayDrag(Offset(100f, 50f))
+            assertEquals(Offset(100f, 50f), viewModel.uiState.value.overlayOffset)
+        }
+
+        @Test
+        fun `onOverlayDrag accumulates multiple drags`() {
+            val viewModel = createViewModel()
+            viewModel.onOverlayDrag(Offset(100f, 50f))
+            viewModel.onOverlayDrag(Offset(-30f, 20f))
+            assertEquals(Offset(70f, 70f), viewModel.uiState.value.overlayOffset)
+        }
+
+        @Test
+        fun `onOverlayScale multiplies scale factor`() {
+            val viewModel = createViewModel()
+            viewModel.onOverlayScale(2f)
+            assertEquals(2f, viewModel.uiState.value.overlayScale)
+        }
+
+        @Test
+        fun `onOverlayScale accumulates`() {
+            val viewModel = createViewModel()
+            viewModel.onOverlayScale(2f)
+            viewModel.onOverlayScale(0.5f)
+            assertEquals(1f, viewModel.uiState.value.overlayScale, 0.001f)
         }
     }
 

@@ -1,6 +1,7 @@
 package io.github.jn0v.traceglass.feature.tracing
 
 import android.net.Uri
+import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.jn0v.traceglass.core.camera.FlashlightController
@@ -57,5 +58,17 @@ class TracingViewModel(
 
     fun onToggleInvertedMode() {
         _uiState.update { it.copy(isInvertedMode = !it.isInvertedMode) }
+    }
+
+    fun onOverlayDrag(delta: Offset) {
+        _uiState.update {
+            it.copy(overlayOffset = it.overlayOffset + delta)
+        }
+    }
+
+    fun onOverlayScale(scaleFactor: Float) {
+        _uiState.update {
+            it.copy(overlayScale = it.overlayScale * scaleFactor)
+        }
     }
 }
