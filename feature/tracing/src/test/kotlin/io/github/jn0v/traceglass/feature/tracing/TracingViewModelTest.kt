@@ -111,6 +111,43 @@ class TracingViewModelTest {
     }
 
     @Nested
+    inner class VisualModes {
+        @Test
+        fun `initial color tint is NONE`() {
+            val viewModel = createViewModel()
+            assertEquals(ColorTint.NONE, viewModel.uiState.value.colorTint)
+        }
+
+        @Test
+        fun `onColorTintChanged updates tint`() {
+            val viewModel = createViewModel()
+            viewModel.onColorTintChanged(ColorTint.RED)
+            assertEquals(ColorTint.RED, viewModel.uiState.value.colorTint)
+        }
+
+        @Test
+        fun `initial inverted mode is off`() {
+            val viewModel = createViewModel()
+            assertFalse(viewModel.uiState.value.isInvertedMode)
+        }
+
+        @Test
+        fun `onToggleInvertedMode flips state`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleInvertedMode()
+            assertTrue(viewModel.uiState.value.isInvertedMode)
+        }
+
+        @Test
+        fun `onToggleInvertedMode twice returns to original`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleInvertedMode()
+            viewModel.onToggleInvertedMode()
+            assertFalse(viewModel.uiState.value.isInvertedMode)
+        }
+    }
+
+    @Nested
     inner class Opacity {
         @Test
         fun `onOpacityChanged updates overlay opacity`() {

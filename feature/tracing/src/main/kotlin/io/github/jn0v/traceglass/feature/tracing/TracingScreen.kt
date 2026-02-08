@@ -9,16 +9,20 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +34,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -38,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.rememberAsyncImagePainter
 import io.github.jn0v.traceglass.core.camera.CameraManager
 import io.github.jn0v.traceglass.feature.tracing.components.OpacityFab
+import io.github.jn0v.traceglass.feature.tracing.components.VisualModeControls
 import org.koin.compose.koinInject
 import org.koin.androidx.compose.koinViewModel
 
@@ -78,6 +86,10 @@ fun TracingScreen(
                 isOpacitySliderVisible = uiState.isOpacitySliderVisible,
                 onToggleOpacitySlider = viewModel::onToggleOpacitySlider,
                 onOpacityChanged = viewModel::onOpacityChanged,
+                colorTint = uiState.colorTint,
+                isInvertedMode = uiState.isInvertedMode,
+                onColorTintChanged = viewModel::onColorTintChanged,
+                onToggleInvertedMode = viewModel::onToggleInvertedMode,
                 onPickImage = {
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -107,6 +119,10 @@ private fun CameraPreviewContent(
     isOpacitySliderVisible: Boolean,
     onToggleOpacitySlider: () -> Unit,
     onOpacityChanged: (Float) -> Unit,
+    colorTint: ColorTint,
+    isInvertedMode: Boolean,
+    onColorTintChanged: (ColorTint) -> Unit,
+    onToggleInvertedMode: () -> Unit,
     onPickImage: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -122,13 +138,15 @@ private fun CameraPreviewContent(
         )
 
         if (overlayImageUri != null) {
+            val effectiveOpacity = if (isInvertedMode) 1f - overlayOpacity else overlayOpacity
             Image(
                 painter = rememberAsyncImagePainter(model = overlayImageUri),
                 contentDescription = "Overlay reference image",
                 modifier = Modifier
                     .fillMaxSize()
-                    .alpha(overlayOpacity),
-                contentScale = ContentScale.Fit
+                    .alpha(effectiveOpacity),
+                contentScale = ContentScale.Fit,
+                colorFilter = colorTint.toColorFilter()
             )
         }
 
@@ -154,6 +172,18 @@ private fun CameraPreviewContent(
             Icon(
                 imageVector = Icons.Filled.Add,
                 contentDescription = "Pick reference image"
+            )
+        }
+
+        if (overlayImageUri != null) {
+            VisualModeControls(
+                colorTint = colorTint,
+                isInvertedMode = isInvertedMode,
+                onColorTintChanged = onColorTintChanged,
+                onToggleInvertedMode = onToggleInvertedMode,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
             )
         }
 
