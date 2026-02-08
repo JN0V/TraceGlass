@@ -1,15 +1,29 @@
 package io.github.jn0v.traceglass.feature.tracing
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import io.github.jn0v.traceglass.core.camera.FlashlightController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 
-class TracingViewModel : ViewModel() {
+class TracingViewModel(
+    private val flashlightController: FlashlightController
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(TracingUiState())
+    private val _uiState = MutableStateFlow(
+        TracingUiState(hasFlashlight = flashlightController.hasFlashlight)
+    )
     val uiState: StateFlow<TracingUiState> = _uiState.asStateFlow()
+
+    init {
+        flashlightController.isTorchOn
+            .onEach { torchOn -> _uiState.update { it.copy(isTorchOn = torchOn) } }
+            .launchIn(viewModelScope)
+    }
 
     fun onPermissionResult(granted: Boolean) {
         _uiState.update {
@@ -17,5 +31,9 @@ class TracingViewModel : ViewModel() {
                 permissionState = if (granted) PermissionState.GRANTED else PermissionState.DENIED
             )
         }
+    }
+
+    fun onToggleTorch() {
+        flashlightController.toggleTorch()
     }
 }
