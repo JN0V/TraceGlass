@@ -50,4 +50,12 @@ class TracingViewModel(
     fun onToggleOpacitySlider() {
         _uiState.update { it.copy(isOpacitySliderVisible = !it.isOpacitySliderVisible) }
     }
+
+    fun onColorTintChanged(tint: ColorTint) {
+        _uiState.update { it.copy(colorTint = tint) }
+    }
+
+    fun onToggleInvertedMode() {
+        _uiState.update { it.copy(isInvertedMode = !it.isInvertedMode) }
+    }
 }
