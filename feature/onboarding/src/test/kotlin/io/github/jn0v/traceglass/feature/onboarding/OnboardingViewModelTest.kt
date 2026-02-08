@@ -1,0 +1,127 @@
+package io.github.jn0v.traceglass.feature.onboarding
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class OnboardingViewModelTest {
+
+    private val testDispatcher = StandardTestDispatcher()
+    private lateinit var repo: FakeOnboardingRepository
+
+    @BeforeEach
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+        repo = FakeOnboardingRepository()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    private fun createViewModel() = OnboardingViewModel(repo)
+
+    @Nested
+    inner class InitialState {
+        @Test
+        fun `starts on page 0`() {
+            val vm = createViewModel()
+            assertEquals(0, vm.uiState.value.currentPage)
+        }
+
+        @Test
+        fun `default tier is FULL_DIY`() {
+            val vm = createViewModel()
+            assertEquals(SetupTier.FULL_DIY, vm.uiState.value.selectedTier)
+        }
+
+        @Test
+        fun `not completed initially`() {
+            val vm = createViewModel()
+            assertFalse(vm.uiState.value.isCompleted)
+        }
+    }
+
+    @Nested
+    inner class Navigation {
+        @Test
+        fun `onNextPage advances to next page`() {
+            val vm = createViewModel()
+            vm.onNextPage()
+            assertEquals(1, vm.uiState.value.currentPage)
+        }
+
+        @Test
+        fun `onNextPage does not exceed page 2`() {
+            val vm = createViewModel()
+            vm.onNextPage()
+            vm.onNextPage()
+            vm.onNextPage()
+            assertEquals(2, vm.uiState.value.currentPage)
+        }
+
+        @Test
+        fun `onPageChanged sets current page`() {
+            val vm = createViewModel()
+            vm.onPageChanged(2)
+            assertEquals(2, vm.uiState.value.currentPage)
+        }
+    }
+
+    @Nested
+    inner class TierSelection {
+        @Test
+        fun `onTierSelected changes tier`() {
+            val vm = createViewModel()
+            vm.onTierSelected(SetupTier.SEMI_EQUIPPED)
+            assertEquals(SetupTier.SEMI_EQUIPPED, vm.uiState.value.selectedTier)
+        }
+
+        @Test
+        fun `onTierSelected to FULL_KIT`() {
+            val vm = createViewModel()
+            vm.onTierSelected(SetupTier.FULL_KIT)
+            assertEquals(SetupTier.FULL_KIT, vm.uiState.value.selectedTier)
+        }
+    }
+
+    @Nested
+    inner class Completion {
+        @Test
+        fun `onComplete marks as completed`() = runTest {
+            val vm = createViewModel()
+            vm.onComplete()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertTrue(vm.uiState.value.isCompleted)
+        }
+
+        @Test
+        fun `onComplete persists to repository`() = runTest {
+            val vm = createViewModel()
+            vm.onComplete()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(1, repo.setCompletedCount)
+        }
+
+        @Test
+        fun `onSkip marks as completed`() = runTest {
+            val vm = createViewModel()
+            vm.onSkip()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertTrue(vm.uiState.value.isCompleted)
+            assertEquals(1, repo.setCompletedCount)
+        }
+    }
+}
