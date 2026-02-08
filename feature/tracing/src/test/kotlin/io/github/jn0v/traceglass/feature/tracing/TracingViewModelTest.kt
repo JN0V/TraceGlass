@@ -111,6 +111,41 @@ class TracingViewModelTest {
     }
 
     @Nested
+    inner class Opacity {
+        @Test
+        fun `onOpacityChanged updates overlay opacity`() {
+            val viewModel = createViewModel()
+            viewModel.onOpacityChanged(0.75f)
+            assertEquals(0.75f, viewModel.uiState.value.overlayOpacity)
+        }
+
+        @Test
+        fun `opacity is clamped between 0 and 1`() {
+            val viewModel = createViewModel()
+            viewModel.onOpacityChanged(-0.1f)
+            assertEquals(0f, viewModel.uiState.value.overlayOpacity)
+            viewModel.onOpacityChanged(1.5f)
+            assertEquals(1f, viewModel.uiState.value.overlayOpacity)
+        }
+
+        @Test
+        fun `onToggleOpacitySlider opens slider`() {
+            val viewModel = createViewModel()
+            assertFalse(viewModel.uiState.value.isOpacitySliderVisible)
+            viewModel.onToggleOpacitySlider()
+            assertTrue(viewModel.uiState.value.isOpacitySliderVisible)
+        }
+
+        @Test
+        fun `onToggleOpacitySlider twice closes slider`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleOpacitySlider()
+            viewModel.onToggleOpacitySlider()
+            assertFalse(viewModel.uiState.value.isOpacitySliderVisible)
+        }
+    }
+
+    @Nested
     inner class Flashlight {
         @Test
         fun `initial torch state is off`() {
