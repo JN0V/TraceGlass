@@ -2,6 +2,8 @@ package io.github.jn0v.traceglass.feature.tracing
 
 import android.net.Uri
 import androidx.compose.ui.geometry.Offset
+import io.github.jn0v.traceglass.core.cv.DetectedMarker
+import io.github.jn0v.traceglass.core.cv.MarkerResult
 import io.github.jn0v.traceglass.feature.tracing.FakeFlashlightController
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -270,6 +272,55 @@ class TracingViewModelTest {
             viewModel.onToggleOpacitySlider()
             viewModel.onToggleOpacitySlider()
             assertFalse(viewModel.uiState.value.isOpacitySliderVisible)
+        }
+    }
+
+    @Nested
+    inner class MarkerTracking {
+        private fun marker(id: Int, cx: Float, cy: Float) =
+            DetectedMarker(id, cx, cy, emptyList(), 1f)
+
+        @Test
+        fun `initial tracking state is INACTIVE`() {
+            val viewModel = createViewModel()
+            assertEquals(TrackingState.INACTIVE, viewModel.uiState.value.trackingState)
+        }
+
+        @Test
+        fun `onMarkerResultReceived with markers sets TRACKING`() {
+            val viewModel = createViewModel()
+            val result = MarkerResult(listOf(marker(0, 100f, 200f)), 5L)
+            viewModel.onMarkerResultReceived(result)
+            assertEquals(TrackingState.TRACKING, viewModel.uiState.value.trackingState)
+        }
+
+        @Test
+        fun `onMarkerResultReceived with no markers sets LOST`() {
+            val viewModel = createViewModel()
+            viewModel.onMarkerResultReceived(MarkerResult(listOf(marker(0, 100f, 200f)), 5L))
+            viewModel.onMarkerResultReceived(MarkerResult(emptyList(), 5L))
+            assertEquals(TrackingState.LOST, viewModel.uiState.value.trackingState)
+        }
+
+        @Test
+        fun `tracking updates overlay offset from marker center`() {
+            val viewModel = createViewModel()
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(marker(0, 540f, 960f)), 5L),
+                frameWidth = 1080f, frameHeight = 1920f
+            )
+            assertEquals(0f, viewModel.uiState.value.overlayOffset.x, 1f)
+            assertEquals(0f, viewModel.uiState.value.overlayOffset.y, 1f)
+        }
+
+        @Test
+        fun `tracking with off-center marker shifts overlay`() {
+            val viewModel = createViewModel()
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(marker(0, 800f, 960f)), 5L),
+                frameWidth = 1080f, frameHeight = 1920f
+            )
+            assertTrue(viewModel.uiState.value.overlayOffset.x > 0f)
         }
     }
 
