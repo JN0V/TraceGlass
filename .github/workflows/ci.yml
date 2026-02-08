@@ -27,7 +27,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-36 build-tools;34.0.0'
+          packages: 'platforms;android-36 build-tools;34.0.0 ndk;27.2.12479018 cmake;3.31.5'
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -37,6 +37,21 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml', '**/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
+
+      - name: Cache OpenCV SDK
+        id: cache-opencv
+        uses: actions/cache@v4
+        with:
+          path: sdk/OpenCV-android-sdk
+          key: opencv-4.10.0-android-sdk
+
+      - name: Download OpenCV Android SDK
+        if: steps.cache-opencv.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p sdk
+          curl -sL https://github.com/opencv/opencv/releases/download/4.10.0/opencv-4.10.0-android-sdk.zip -o /tmp/opencv-sdk.zip
+          unzip -q /tmp/opencv-sdk.zip -d sdk/
+          rm /tmp/opencv-sdk.zip
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
