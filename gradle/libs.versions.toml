@@ -12,6 +12,7 @@ camerax = "1.4.1"
 datastore = "1.1.1"
 junit5 = "5.11.4"
 mockk = "1.13.14"
+coil = "3.0.4"
 
 [libraries]
 # AndroidX Core
@@ -57,6 +58,9 @@ koin-test = { group = "io.insert-koin", name = "koin-test", version.ref = "koin"
 junit5-api = { group = "org.junit.jupiter", name = "junit-jupiter-api", version.ref = "junit5" }
 junit5-engine = { group = "org.junit.jupiter", name = "junit-jupiter-engine", version.ref = "junit5" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+
+# Image loading
+coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -1,5 +1,6 @@
 package io.github.jn0v.traceglass.feature.tracing
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.jn0v.traceglass.core.camera.FlashlightController
@@ -35,5 +36,10 @@ class TracingViewModel(
 
     fun onToggleTorch() {
         flashlightController.toggleTorch()
+    }
+
+    fun onImageSelected(uri: Uri?) {
+        uri ?: return
+        _uiState.update { it.copy(overlayImageUri = uri) }
     }
 }

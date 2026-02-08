@@ -1,9 +1,12 @@
 package io.github.jn0v.traceglass.feature.tracing
 
 import android.Manifest
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
@@ -25,10 +29,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.rememberAsyncImagePainter
 import io.github.jn0v.traceglass.core.camera.CameraManager
 import org.koin.compose.koinInject
 import org.koin.androidx.compose.koinViewModel
@@ -46,6 +53,12 @@ fun TracingScreen(
         viewModel.onPermissionResult(granted)
     }
 
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        viewModel.onImageSelected(uri)
+    }
+
     when (uiState.permissionState) {
         PermissionState.NOT_REQUESTED -> {
             LaunchedEffect(Unit) {
@@ -58,7 +71,14 @@ fun TracingScreen(
                 cameraManager = cameraManager,
                 isTorchOn = uiState.isTorchOn,
                 hasFlashlight = uiState.hasFlashlight,
-                onToggleTorch = viewModel::onToggleTorch
+                onToggleTorch = viewModel::onToggleTorch,
+                overlayImageUri = uiState.overlayImageUri,
+                overlayOpacity = uiState.overlayOpacity,
+                onPickImage = {
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
             )
         }
 
@@ -77,7 +97,10 @@ private fun CameraPreviewContent(
     cameraManager: CameraManager,
     isTorchOn: Boolean,
     hasFlashlight: Boolean,
-    onToggleTorch: () -> Unit
+    onToggleTorch: () -> Unit,
+    overlayImageUri: Uri?,
+    overlayOpacity: Float,
+    onPickImage: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -90,6 +113,30 @@ private fun CameraPreviewContent(
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        if (overlayImageUri != null) {
+            Image(
+                painter = rememberAsyncImagePainter(model = overlayImageUri),
+                contentDescription = "Overlay reference image",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(overlayOpacity),
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        FloatingActionButton(
+            onClick = onPickImage,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .size(48.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = "Pick reference image"
+            )
+        }
 
         if (hasFlashlight) {
             FloatingActionButton(
