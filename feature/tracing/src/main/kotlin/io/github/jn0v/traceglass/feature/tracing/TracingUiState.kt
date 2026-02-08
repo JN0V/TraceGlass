@@ -7,7 +7,8 @@ data class TracingUiState(
     val isTorchOn: Boolean = false,
     val hasFlashlight: Boolean = true,
     val overlayImageUri: Uri? = null,
-    val overlayOpacity: Float = 0.5f
+    val overlayOpacity: Float = 0.5f,
+    val isOpacitySliderVisible: Boolean = false
 )
 
 enum class PermissionState {

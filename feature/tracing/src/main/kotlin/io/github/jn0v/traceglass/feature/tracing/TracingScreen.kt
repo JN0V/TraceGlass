@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.rememberAsyncImagePainter
 import io.github.jn0v.traceglass.core.camera.CameraManager
+import io.github.jn0v.traceglass.feature.tracing.components.OpacityFab
 import org.koin.compose.koinInject
 import org.koin.androidx.compose.koinViewModel
 
@@ -74,6 +75,9 @@ fun TracingScreen(
                 onToggleTorch = viewModel::onToggleTorch,
                 overlayImageUri = uiState.overlayImageUri,
                 overlayOpacity = uiState.overlayOpacity,
+                isOpacitySliderVisible = uiState.isOpacitySliderVisible,
+                onToggleOpacitySlider = viewModel::onToggleOpacitySlider,
+                onOpacityChanged = viewModel::onOpacityChanged,
                 onPickImage = {
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -100,6 +104,9 @@ private fun CameraPreviewContent(
     onToggleTorch: () -> Unit,
     overlayImageUri: Uri?,
     overlayOpacity: Float,
+    isOpacitySliderVisible: Boolean,
+    onToggleOpacitySlider: () -> Unit,
+    onOpacityChanged: (Float) -> Unit,
     onPickImage: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -122,6 +129,18 @@ private fun CameraPreviewContent(
                     .fillMaxSize()
                     .alpha(overlayOpacity),
                 contentScale = ContentScale.Fit
+            )
+        }
+
+        if (overlayImageUri != null) {
+            OpacityFab(
+                opacity = overlayOpacity,
+                isSliderVisible = isOpacitySliderVisible,
+                onToggleSlider = onToggleOpacitySlider,
+                onOpacityChanged = onOpacityChanged,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(16.dp)
             )
         }
 

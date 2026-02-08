@@ -42,4 +42,12 @@ class TracingViewModel(
         uri ?: return
         _uiState.update { it.copy(overlayImageUri = uri) }
     }
+
+    fun onOpacityChanged(opacity: Float) {
+        _uiState.update { it.copy(overlayOpacity = opacity.coerceIn(0f, 1f)) }
+    }
+
+    fun onToggleOpacitySlider() {
+        _uiState.update { it.copy(isOpacitySliderVisible = !it.isOpacitySliderVisible) }
+    }
 }
