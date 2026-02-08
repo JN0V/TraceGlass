@@ -1,0 +1,16 @@
+package io.github.jn0v.traceglass.core.session
+
+data class SessionData(
+    val imageUri: String? = null,
+    val overlayOffsetX: Float = 0f,
+    val overlayOffsetY: Float = 0f,
+    val overlayScale: Float = 1f,
+    val overlayOpacity: Float = 0.5f,
+    val colorTint: String = "NONE",
+    val isInvertedMode: Boolean = false,
+    val isSessionActive: Boolean = false,
+    val timelapseSnapshotCount: Int = 0
+) {
+    val hasActiveSession: Boolean
+        get() = imageUri != null
+}

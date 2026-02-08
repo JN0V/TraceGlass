@@ -9,7 +9,11 @@ import io.github.jn0v.traceglass.core.cv.MarkerResult
 import io.github.jn0v.traceglass.core.overlay.OverlayTransformCalculator
 import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
 import io.github.jn0v.traceglass.core.overlay.TrackingStatus
+import io.github.jn0v.traceglass.core.session.SessionData
+import io.github.jn0v.traceglass.core.session.SessionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -19,7 +23,8 @@ import kotlinx.coroutines.flow.update
 class TracingViewModel(
     private val flashlightController: FlashlightController,
     private val transformCalculator: OverlayTransformCalculator = OverlayTransformCalculator(),
-    private val trackingStateManager: TrackingStateManager = TrackingStateManager()
+    private val trackingStateManager: TrackingStateManager = TrackingStateManager(),
+    private val sessionRepository: SessionRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -84,6 +89,40 @@ class TracingViewModel(
 
     fun onToggleControlsVisibility() {
         _uiState.update { it.copy(areControlsVisible = !it.areControlsVisible) }
+    }
+
+    suspend fun saveSession() {
+        val repo = sessionRepository ?: return
+        val state = _uiState.value
+        repo.save(
+            SessionData(
+                imageUri = state.overlayImageUri?.toString(),
+                overlayOffsetX = state.overlayOffset.x,
+                overlayOffsetY = state.overlayOffset.y,
+                overlayScale = state.overlayScale,
+                overlayOpacity = state.overlayOpacity,
+                colorTint = state.colorTint.name,
+                isInvertedMode = state.isInvertedMode,
+                isSessionActive = state.isSessionActive
+            )
+        )
+    }
+
+    suspend fun restoreSession() {
+        val repo = sessionRepository ?: return
+        val data = repo.sessionData.first()
+        if (!data.hasActiveSession) return
+        _uiState.update {
+            it.copy(
+                overlayImageUri = data.imageUri?.let { uri -> Uri.parse(uri) },
+                overlayOffset = Offset(data.overlayOffsetX, data.overlayOffsetY),
+                overlayScale = data.overlayScale,
+                overlayOpacity = data.overlayOpacity,
+                colorTint = ColorTint.entries.find { t -> t.name == data.colorTint } ?: ColorTint.NONE,
+                isInvertedMode = data.isInvertedMode,
+                isSessionActive = data.isSessionActive
+            )
+        }
     }
 
     fun onMarkerResultReceived(
