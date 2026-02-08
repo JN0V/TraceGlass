@@ -13,7 +13,9 @@ data class TracingUiState(
     val colorTint: ColorTint = ColorTint.NONE,
     val isInvertedMode: Boolean = false,
     val overlayOffset: Offset = Offset.Zero,
-    val overlayScale: Float = 1f
+    val overlayScale: Float = 1f,
+    val isSessionActive: Boolean = false,
+    val areControlsVisible: Boolean = true
 )
 
 enum class ColorTint {
