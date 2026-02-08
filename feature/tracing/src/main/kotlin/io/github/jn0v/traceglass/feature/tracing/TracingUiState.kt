@@ -1,6 +1,7 @@
 package io.github.jn0v.traceglass.feature.tracing
 
 import android.net.Uri
+import androidx.compose.ui.geometry.Offset
 
 data class TracingUiState(
     val permissionState: PermissionState = PermissionState.NOT_REQUESTED,
@@ -10,7 +11,9 @@ data class TracingUiState(
     val overlayOpacity: Float = 0.5f,
     val isOpacitySliderVisible: Boolean = false,
     val colorTint: ColorTint = ColorTint.NONE,
-    val isInvertedMode: Boolean = false
+    val isInvertedMode: Boolean = false,
+    val overlayOffset: Offset = Offset.Zero,
+    val overlayScale: Float = 1f
 )
 
 enum class ColorTint {
