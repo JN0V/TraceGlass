@@ -441,5 +441,30 @@ class TracingViewModelTest {
             assertEquals(0.5f, viewModel.uiState.value.overlayOpacity)
             assertEquals(1f, viewModel.uiState.value.overlayScale)
         }
+
+        @Test
+        fun `onToggleSession triggers auto-save`() = runTest {
+            val repo = FakeSessionRepository()
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.onToggleSession()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(1, repo.saveCount)
+            assertTrue(viewModel.uiState.value.isSessionActive)
+        }
+
+        @Test
+        fun `pause then resume preserves session state`() = runTest {
+            val repo = FakeSessionRepository()
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.onToggleSession()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isSessionActive)
+
+            viewModel.onToggleSession()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.isSessionActive)
+            assertEquals(2, repo.saveCount)
+        }
     }
 }
