@@ -54,6 +54,7 @@ tasks.whenTaskAdded {
 dependencies {
     implementation(project(":core:camera"))
     implementation(project(":core:cv"))
+    implementation(project(":core:session"))
     implementation(project(":feature:tracing"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:timelapse"))

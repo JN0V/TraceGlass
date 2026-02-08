@@ -5,8 +5,11 @@ import androidx.compose.ui.geometry.Offset
 import io.github.jn0v.traceglass.core.cv.DetectedMarker
 import io.github.jn0v.traceglass.core.cv.MarkerResult
 import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
-import io.github.jn0v.traceglass.feature.tracing.FakeFlashlightController
+import io.github.jn0v.traceglass.core.session.SessionData
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -41,10 +44,12 @@ class TracingViewModelTest {
 
     private fun createViewModel(
         flashlightController: FakeFlashlightController = fakeFlashlight,
-        trackingStateManager: TrackingStateManager? = null
+        trackingStateManager: TrackingStateManager? = null,
+        sessionRepository: FakeSessionRepository = FakeSessionRepository()
     ) = TracingViewModel(
         flashlightController = flashlightController,
-        trackingStateManager = trackingStateManager ?: TrackingStateManager()
+        trackingStateManager = trackingStateManager ?: TrackingStateManager(),
+        sessionRepository = sessionRepository
     )
 
     @Nested
@@ -379,6 +384,62 @@ class TracingViewModelTest {
             val noFlash = FakeFlashlightController(hasFlashlight = false)
             val viewModel = createViewModel(flashlightController = noFlash)
             assertFalse(viewModel.uiState.value.hasFlashlight)
+        }
+    }
+
+    @Nested
+    inner class SessionPersistence {
+        @Test
+        fun `saveSession persists current state`() = runTest {
+            val repo = FakeSessionRepository()
+            val viewModel = createViewModel(sessionRepository = repo)
+            val uri = mockk<Uri>()
+            viewModel.onImageSelected(uri)
+            viewModel.onOpacityChanged(0.8f)
+
+            viewModel.saveSession()
+
+            assertEquals(1, repo.saveCount)
+        }
+
+        @Test
+        fun `restoreSession loads saved state`() = runTest {
+            val fakeUri = mockk<Uri>()
+            mockkStatic(Uri::class)
+            every { Uri.parse("content://test/image") } returns fakeUri
+
+            val repo = FakeSessionRepository()
+            repo.save(SessionData(
+                imageUri = "content://test/image",
+                overlayOffsetX = 50f,
+                overlayOffsetY = 100f,
+                overlayScale = 2f,
+                overlayOpacity = 0.7f,
+                colorTint = "RED",
+                isInvertedMode = true,
+                isSessionActive = true
+            ))
+
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+
+            assertEquals(0.7f, viewModel.uiState.value.overlayOpacity)
+            assertEquals(2f, viewModel.uiState.value.overlayScale)
+            assertTrue(viewModel.uiState.value.isInvertedMode)
+            assertEquals(fakeUri, viewModel.uiState.value.overlayImageUri)
+
+            unmockkStatic(Uri::class)
+        }
+
+        @Test
+        fun `restoreSession with no saved data keeps defaults`() = runTest {
+            val repo = FakeSessionRepository()
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+
+            assertNull(viewModel.uiState.value.overlayImageUri)
+            assertEquals(0.5f, viewModel.uiState.value.overlayOpacity)
+            assertEquals(1f, viewModel.uiState.value.overlayScale)
         }
     }
 }
