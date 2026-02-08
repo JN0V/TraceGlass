@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.ui.geometry.Offset
 import io.github.jn0v.traceglass.core.cv.DetectedMarker
 import io.github.jn0v.traceglass.core.cv.MarkerResult
+import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
 import io.github.jn0v.traceglass.feature.tracing.FakeFlashlightController
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -39,8 +40,12 @@ class TracingViewModelTest {
     }
 
     private fun createViewModel(
-        flashlightController: FakeFlashlightController = fakeFlashlight
-    ) = TracingViewModel(flashlightController)
+        flashlightController: FakeFlashlightController = fakeFlashlight,
+        trackingStateManager: TrackingStateManager? = null
+    ) = TracingViewModel(
+        flashlightController = flashlightController,
+        trackingStateManager = trackingStateManager ?: TrackingStateManager()
+    )
 
     @Nested
     inner class Permission {
@@ -295,11 +300,25 @@ class TracingViewModelTest {
         }
 
         @Test
-        fun `onMarkerResultReceived with no markers sets LOST`() {
-            val viewModel = createViewModel()
+        fun `onMarkerResultReceived with no markers after timeout sets LOST`() {
+            var time = 0L
+            val manager = TrackingStateManager(lostTimeoutMs = 500L, timeProvider = { time })
+            val viewModel = createViewModel(trackingStateManager = manager)
             viewModel.onMarkerResultReceived(MarkerResult(listOf(marker(0, 100f, 200f)), 5L))
+            time = 600L
             viewModel.onMarkerResultReceived(MarkerResult(emptyList(), 5L))
             assertEquals(TrackingState.LOST, viewModel.uiState.value.trackingState)
+        }
+
+        @Test
+        fun `brief marker loss stays TRACKING within grace period`() {
+            var time = 0L
+            val manager = TrackingStateManager(lostTimeoutMs = 500L, timeProvider = { time })
+            val viewModel = createViewModel(trackingStateManager = manager)
+            viewModel.onMarkerResultReceived(MarkerResult(listOf(marker(0, 100f, 200f)), 5L))
+            time = 200L
+            viewModel.onMarkerResultReceived(MarkerResult(emptyList(), 5L))
+            assertEquals(TrackingState.TRACKING, viewModel.uiState.value.trackingState)
         }
 
         @Test
