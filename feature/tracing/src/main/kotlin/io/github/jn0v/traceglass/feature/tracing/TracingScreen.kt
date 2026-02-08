@@ -55,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.rememberAsyncImagePainter
 import io.github.jn0v.traceglass.core.camera.CameraManager
 import io.github.jn0v.traceglass.feature.tracing.components.OpacityFab
+import io.github.jn0v.traceglass.feature.tracing.components.TrackingIndicator
 import io.github.jn0v.traceglass.feature.tracing.components.VisualModeControls
 import org.koin.compose.koinInject
 import org.koin.androidx.compose.koinViewModel
@@ -264,6 +265,14 @@ private fun CameraPreviewContent(
                     Text(if (isSessionActive) "Stop" else "Start")
                 }
             }
+
+            TrackingIndicator(
+                trackingState = trackingState,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(16.dp)
+            )
 
             if (hasFlashlight) {
                 FloatingActionButton(
