@@ -17,7 +17,7 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables.generatedDensities()
+        vectorDrawables.generatedDensities?.clear()
     }
 
     buildTypes {
@@ -43,9 +43,6 @@ android {
         compose = true
     }
 
-    androidResources {
-        noCompress += "png"
-    }
 }
 
 tasks.whenTaskAdded {
