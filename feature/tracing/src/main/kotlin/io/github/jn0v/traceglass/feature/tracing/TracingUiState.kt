@@ -15,8 +15,15 @@ data class TracingUiState(
     val overlayOffset: Offset = Offset.Zero,
     val overlayScale: Float = 1f,
     val isSessionActive: Boolean = false,
-    val areControlsVisible: Boolean = true
+    val areControlsVisible: Boolean = true,
+    val trackingState: TrackingState = TrackingState.INACTIVE
 )
+
+enum class TrackingState {
+    INACTIVE,
+    TRACKING,
+    LOST
+}
 
 enum class ColorTint {
     NONE,

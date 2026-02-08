@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,9 +62,16 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun TracingScreen(
     viewModel: TracingViewModel = koinViewModel(),
-    cameraManager: CameraManager = koinInject()
+    cameraManager: CameraManager = koinInject(),
+    frameAnalyzer: FrameAnalyzer = koinInject()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(frameAnalyzer) {
+        frameAnalyzer.latestResult.collect { result ->
+            viewModel.onMarkerResultReceived(result)
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -87,6 +95,7 @@ fun TracingScreen(
         PermissionState.GRANTED -> {
             CameraPreviewContent(
                 cameraManager = cameraManager,
+                frameAnalyzer = frameAnalyzer,
                 isTorchOn = uiState.isTorchOn,
                 hasFlashlight = uiState.hasFlashlight,
                 onToggleTorch = viewModel::onToggleTorch,
@@ -107,6 +116,7 @@ fun TracingScreen(
                 areControlsVisible = uiState.areControlsVisible,
                 onToggleSession = viewModel::onToggleSession,
                 onToggleControlsVisibility = viewModel::onToggleControlsVisibility,
+                trackingState = uiState.trackingState,
                 onPickImage = {
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -128,6 +138,7 @@ fun TracingScreen(
 @Composable
 private fun CameraPreviewContent(
     cameraManager: CameraManager,
+    frameAnalyzer: FrameAnalyzer,
     isTorchOn: Boolean,
     hasFlashlight: Boolean,
     onToggleTorch: () -> Unit,
@@ -148,6 +159,7 @@ private fun CameraPreviewContent(
     areControlsVisible: Boolean,
     onToggleSession: () -> Unit,
     onToggleControlsVisibility: () -> Unit,
+    trackingState: TrackingState,
     onPickImage: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -169,7 +181,7 @@ private fun CameraPreviewContent(
         AndroidView(
             factory = { context ->
                 PreviewView(context).also { previewView ->
-                    cameraManager.bindPreview(lifecycleOwner, previewView.surfaceProvider)
+                    cameraManager.bindPreview(lifecycleOwner, previewView.surfaceProvider, frameAnalyzer)
                 }
             },
             modifier = Modifier.fillMaxSize()

@@ -2,8 +2,10 @@ package io.github.jn0v.traceglass.core.camera.impl
 
 import android.content.Context
 import android.content.pm.PackageManager
+import java.util.concurrent.Executors
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
@@ -18,6 +20,7 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
+    private val analysisExecutor = Executors.newSingleThreadExecutor()
 
     private val _isTorchOn = MutableStateFlow(false)
     override val isTorchOn: StateFlow<Boolean> = _isTorchOn.asStateFlow()
@@ -27,7 +30,8 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
 
     override fun bindPreview(
         lifecycleOwner: LifecycleOwner,
-        surfaceProvider: Preview.SurfaceProvider
+        surfaceProvider: Preview.SurfaceProvider,
+        imageAnalyzer: ImageAnalysis.Analyzer?
     ) {
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
@@ -35,11 +39,22 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
             val preview = Preview.Builder().build().also {
                 it.surfaceProvider = surfaceProvider
             }
+
+            val useCases = mutableListOf<androidx.camera.core.UseCase>(preview)
+
+            if (imageAnalyzer != null) {
+                val analysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+                    .also { it.setAnalyzer(analysisExecutor, imageAnalyzer) }
+                useCases.add(analysis)
+            }
+
             provider.unbindAll()
             camera = provider.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
-                preview
+                *useCases.toTypedArray()
             )
             cameraProvider = provider
         }, ContextCompat.getMainExecutor(context))

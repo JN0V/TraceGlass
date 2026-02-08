@@ -5,6 +5,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.jn0v.traceglass.core.camera.FlashlightController
+import io.github.jn0v.traceglass.core.cv.MarkerResult
+import io.github.jn0v.traceglass.core.overlay.OverlayTransformCalculator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,7 +15,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 
 class TracingViewModel(
-    private val flashlightController: FlashlightController
+    private val flashlightController: FlashlightController,
+    private val transformCalculator: OverlayTransformCalculator = OverlayTransformCalculator()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -78,5 +81,30 @@ class TracingViewModel(
 
     fun onToggleControlsVisibility() {
         _uiState.update { it.copy(areControlsVisible = !it.areControlsVisible) }
+    }
+
+    fun onMarkerResultReceived(
+        result: MarkerResult,
+        frameWidth: Float = 1080f,
+        frameHeight: Float = 1920f
+    ) {
+        val trackingState = when {
+            result.isTracking -> TrackingState.TRACKING
+            _uiState.value.trackingState == TrackingState.INACTIVE -> TrackingState.INACTIVE
+            else -> TrackingState.LOST
+        }
+
+        if (result.isTracking) {
+            val transform = transformCalculator.compute(result, frameWidth, frameHeight)
+            _uiState.update {
+                it.copy(
+                    trackingState = trackingState,
+                    overlayOffset = Offset(transform.offsetX, transform.offsetY),
+                    overlayScale = transform.scale
+                )
+            }
+        } else {
+            _uiState.update { it.copy(trackingState = trackingState) }
+        }
     }
 }
