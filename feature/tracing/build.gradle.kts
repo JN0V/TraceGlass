@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
+    implementation(libs.coil.compose)
 
     testImplementation(libs.junit5.api)
     testRuntimeOnly(libs.junit5.engine)

@@ -1,6 +1,8 @@
 package io.github.jn0v.traceglass.feature.tracing
 
+import android.net.Uri
 import io.github.jn0v.traceglass.feature.tracing.FakeFlashlightController
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -10,6 +12,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -64,6 +67,46 @@ class TracingViewModelTest {
             viewModel.onPermissionResult(granted = false)
             viewModel.onPermissionResult(granted = true)
             assertEquals(PermissionState.GRANTED, viewModel.uiState.value.permissionState)
+        }
+    }
+
+    @Nested
+    inner class ImageImport {
+        @Test
+        fun `initial state has no overlay image`() {
+            val viewModel = createViewModel()
+            assertNull(viewModel.uiState.value.overlayImageUri)
+        }
+
+        @Test
+        fun `default overlay opacity is 50 percent`() {
+            val viewModel = createViewModel()
+            assertEquals(0.5f, viewModel.uiState.value.overlayOpacity)
+        }
+
+        @Test
+        fun `when image selected then overlayImageUri is set`() {
+            val viewModel = createViewModel()
+            val uri = mockk<Uri>()
+            viewModel.onImageSelected(uri)
+            assertEquals(uri, viewModel.uiState.value.overlayImageUri)
+        }
+
+        @Test
+        fun `when image selection cancelled then state unchanged`() {
+            val viewModel = createViewModel()
+            viewModel.onImageSelected(null)
+            assertNull(viewModel.uiState.value.overlayImageUri)
+        }
+
+        @Test
+        fun `when new image selected it replaces the previous one`() {
+            val viewModel = createViewModel()
+            val uri1 = mockk<Uri>(name = "image1")
+            val uri2 = mockk<Uri>(name = "image2")
+            viewModel.onImageSelected(uri1)
+            viewModel.onImageSelected(uri2)
+            assertEquals(uri2, viewModel.uiState.value.overlayImageUri)
         }
     }
 
