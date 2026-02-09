@@ -21,11 +21,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -69,7 +69,7 @@ fun TracingScreen(
     viewModel: TracingViewModel = koinViewModel(),
     cameraManager: CameraManager = koinInject(),
     frameAnalyzer: FrameAnalyzer = koinInject(),
-    onReopenOnboarding: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -140,7 +140,7 @@ fun TracingScreen(
                 onToggleSession = viewModel::onToggleSession,
                 onToggleControlsVisibility = viewModel::onToggleControlsVisibility,
                 trackingState = uiState.trackingState,
-                onReopenOnboarding = onReopenOnboarding,
+                onNavigateToSettings = onNavigateToSettings,
                 onPickImage = {
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -184,7 +184,7 @@ private fun CameraPreviewContent(
     onToggleSession: () -> Unit,
     onToggleControlsVisibility: () -> Unit,
     trackingState: TrackingState,
-    onReopenOnboarding: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     onPickImage: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -298,16 +298,18 @@ private fun CameraPreviewContent(
                     .padding(16.dp)
             )
 
-            if (overlayImageUri == null) {
-                FilledTonalButton(
-                    onClick = onReopenOnboarding,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .statusBarsPadding()
-                        .padding(16.dp)
-                ) {
-                    Text("Setup guide", style = MaterialTheme.typography.labelMedium)
-                }
+            FloatingActionButton(
+                onClick = onNavigateToSettings,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(16.dp)
+                    .size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Settings"
+                )
             }
 
             if (hasFlashlight) {
