@@ -31,8 +31,8 @@ Java_io_github_jn0v_traceglass_core_cv_OpenCvMarkerDetector_nativeDetect(
         jclass listClass = env->FindClass("java/util/ArrayList");
         jmethodID listInit = env->GetMethodID(listClass, "<init>", "()V");
         jobject emptyList = env->NewObject(listClass, listInit);
-        jmethodID resultInit = env->GetMethodID(resultClass, "<init>", "(Ljava/util/List;J)V");
-        return env->NewObject(resultClass, resultInit, emptyList, (jlong)0);
+        jmethodID resultInit = env->GetMethodID(resultClass, "<init>", "(Ljava/util/List;JII)V");
+        return env->NewObject(resultClass, resultInit, emptyList, (jlong)0, (jint)0, (jint)0);
     }
 
     // Create grayscale Mat from YUV (first plane is Y = grayscale)
@@ -104,9 +104,14 @@ Java_io_github_jn0v_traceglass_core_cv_OpenCvMarkerDetector_nativeDetect(
         env->DeleteLocalRef(marker);
     }
 
+    // Effective dimensions after rotation
+    jint effectiveWidth = (rotation == 90 || rotation == 270) ? height : width;
+    jint effectiveHeight = (rotation == 90 || rotation == 270) ? width : height;
+
     jclass resultClass = env->FindClass("io/github/jn0v/traceglass/core/cv/MarkerResult");
-    jmethodID resultInit = env->GetMethodID(resultClass, "<init>", "(Ljava/util/List;J)V");
-    jobject result = env->NewObject(resultClass, resultInit, markerList, (jlong)durationMs);
+    jmethodID resultInit = env->GetMethodID(resultClass, "<init>", "(Ljava/util/List;JII)V");
+    jobject result = env->NewObject(resultClass, resultInit, markerList, (jlong)durationMs,
+        effectiveWidth, effectiveHeight);
 
     return result;
 }
