@@ -10,9 +10,11 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import io.github.jn0v.traceglass.feature.tracing.settings.FakeSettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -384,6 +386,122 @@ class TracingViewModelTest {
             val noFlash = FakeFlashlightController(hasFlashlight = false)
             val viewModel = createViewModel(flashlightController = noFlash)
             assertFalse(viewModel.uiState.value.hasFlashlight)
+        }
+    }
+
+    @Nested
+    inner class BreakReminder {
+        private fun createViewModelWithSettings(
+            settingsRepo: FakeSettingsRepository = FakeSettingsRepository()
+        ) = TracingViewModel(
+            flashlightController = fakeFlashlight,
+            settingsRepository = settingsRepo
+        )
+
+        @Test
+        fun `break reminder not shown by default`() {
+            val viewModel = createViewModelWithSettings()
+            assertFalse(viewModel.uiState.value.showBreakReminder)
+        }
+
+        @Test
+        fun `timer fires after interval when session active and reminders enabled`() = runTest(testDispatcher) {
+            val settings = FakeSettingsRepository()
+            settings.setBreakReminderEnabled(true)
+            settings.setBreakReminderIntervalMinutes(30)
+            val viewModel = createViewModelWithSettings(settings)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onToggleSession() // start session
+            testDispatcher.scheduler.advanceTimeBy(30 * 60_000L + 1)
+
+            assertTrue(viewModel.uiState.value.showBreakReminder)
+        }
+
+        @Test
+        fun `timer does NOT fire when reminders disabled`() = runTest(testDispatcher) {
+            val settings = FakeSettingsRepository()
+            // reminders disabled by default
+            val viewModel = createViewModelWithSettings(settings)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onToggleSession()
+            testDispatcher.scheduler.advanceTimeBy(60 * 60_000L)
+
+            assertFalse(viewModel.uiState.value.showBreakReminder)
+        }
+
+        @Test
+        fun `timer does NOT fire when session inactive`() = runTest(testDispatcher) {
+            val settings = FakeSettingsRepository()
+            settings.setBreakReminderEnabled(true)
+            val viewModel = createViewModelWithSettings(settings)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // session NOT started
+            testDispatcher.scheduler.advanceTimeBy(60 * 60_000L)
+
+            assertFalse(viewModel.uiState.value.showBreakReminder)
+        }
+
+        @Test
+        fun `onBreakReminderDismissed resets flag and restarts timer`() = runTest(testDispatcher) {
+            val settings = FakeSettingsRepository()
+            settings.setBreakReminderEnabled(true)
+            settings.setBreakReminderIntervalMinutes(10)
+            val viewModel = createViewModelWithSettings(settings)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onToggleSession()
+            testDispatcher.scheduler.advanceTimeBy(10 * 60_000L + 1)
+            assertTrue(viewModel.uiState.value.showBreakReminder)
+
+            viewModel.onBreakReminderDismissed()
+            assertFalse(viewModel.uiState.value.showBreakReminder)
+
+            // timer should restart, fire again after another interval
+            testDispatcher.scheduler.advanceTimeBy(10 * 60_000L + 1)
+            assertTrue(viewModel.uiState.value.showBreakReminder)
+        }
+
+        @Test
+        fun `timer resets when interval changes`() = runTest(testDispatcher) {
+            val settings = FakeSettingsRepository()
+            settings.setBreakReminderEnabled(true)
+            settings.setBreakReminderIntervalMinutes(30)
+            val viewModel = createViewModelWithSettings(settings)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onToggleSession()
+            testDispatcher.scheduler.advanceTimeBy(20 * 60_000L) // 20min elapsed
+
+            // change interval to 10min — timer resets
+            settings.setBreakReminderIntervalMinutes(10)
+            testDispatcher.scheduler.runCurrent() // process Flow emission without advancing time
+
+            // should NOT have fired yet (timer just reset with new 10min interval)
+            assertFalse(viewModel.uiState.value.showBreakReminder)
+
+            // advance 10min for new interval
+            testDispatcher.scheduler.advanceTimeBy(10 * 60_000L + 1)
+            assertTrue(viewModel.uiState.value.showBreakReminder)
+        }
+
+        @Test
+        fun `stopping session cancels timer`() = runTest(testDispatcher) {
+            val settings = FakeSettingsRepository()
+            settings.setBreakReminderEnabled(true)
+            settings.setBreakReminderIntervalMinutes(30)
+            val viewModel = createViewModelWithSettings(settings)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onToggleSession() // start
+            testDispatcher.scheduler.advanceTimeBy(20 * 60_000L)
+
+            viewModel.onToggleSession() // stop
+            testDispatcher.scheduler.advanceTimeBy(30 * 60_000L)
+
+            assertFalse(viewModel.uiState.value.showBreakReminder)
         }
     }
 

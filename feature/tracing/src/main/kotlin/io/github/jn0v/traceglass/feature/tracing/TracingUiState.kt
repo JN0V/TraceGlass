@@ -16,7 +16,9 @@ data class TracingUiState(
     val overlayScale: Float = 1f,
     val isSessionActive: Boolean = false,
     val areControlsVisible: Boolean = true,
-    val trackingState: TrackingState = TrackingState.INACTIVE
+    val trackingState: TrackingState = TrackingState.INACTIVE,
+    val showBreakReminder: Boolean = false,
+    val audioFeedbackEnabled: Boolean = false
 )
 
 enum class TrackingState {
