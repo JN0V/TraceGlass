@@ -18,6 +18,7 @@ data class TracingUiState(
     val isSessionActive: Boolean = false,
     val areControlsVisible: Boolean = true,
     val trackingState: TrackingState = TrackingState.INACTIVE,
+    val detectedMarkerCount: Int = 0,
     val showBreakReminder: Boolean = false,
     val audioFeedbackEnabled: Boolean = false
 )

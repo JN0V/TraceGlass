@@ -179,13 +179,14 @@ class TracingViewModel(
             _uiState.update {
                 it.copy(
                     trackingState = trackingState,
+                    detectedMarkerCount = result.markerCount,
                     overlayOffset = Offset(transform.offsetX, transform.offsetY),
                     overlayScale = transform.scale,
                     overlayRotation = transform.rotation
                 )
             }
         } else {
-            _uiState.update { it.copy(trackingState = trackingState) }
+            _uiState.update { it.copy(trackingState = trackingState, detectedMarkerCount = 0) }
         }
     }
 }
