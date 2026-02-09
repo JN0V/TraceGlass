@@ -29,6 +29,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -36,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
@@ -140,6 +144,9 @@ fun TracingScreen(
                 onToggleSession = viewModel::onToggleSession,
                 onToggleControlsVisibility = viewModel::onToggleControlsVisibility,
                 trackingState = uiState.trackingState,
+                showBreakReminder = uiState.showBreakReminder,
+                audioFeedbackEnabled = uiState.audioFeedbackEnabled,
+                onBreakReminderDismissed = viewModel::onBreakReminderDismissed,
                 onNavigateToSettings = onNavigateToSettings,
                 onPickImage = {
                     photoPickerLauncher.launch(
@@ -184,11 +191,25 @@ private fun CameraPreviewContent(
     onToggleSession: () -> Unit,
     onToggleControlsVisibility: () -> Unit,
     trackingState: TrackingState,
+    showBreakReminder: Boolean,
+    audioFeedbackEnabled: Boolean,
+    onBreakReminderDismissed: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onPickImage: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(showBreakReminder) {
+        if (showBreakReminder) {
+            if (audioFeedbackEnabled) {
+                AudioFeedbackPlayer(context).playBreakReminderTone()
+            }
+            snackbarHostState.showSnackbar("Time for a break!")
+            onBreakReminderDismissed()
+        }
+    }
 
     DisposableEffect(isSessionActive) {
         val window = (context as? android.app.Activity)?.window
@@ -337,6 +358,13 @@ private fun CameraPreviewContent(
                     }
             )
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 80.dp)
+        )
     }
 
     DisposableEffect(Unit) {

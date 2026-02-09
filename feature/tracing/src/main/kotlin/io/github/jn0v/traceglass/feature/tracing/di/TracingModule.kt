@@ -10,6 +10,6 @@ import org.koin.dsl.module
 val tracingModule = module {
     single { OverlayTransformCalculator() }
     single { FrameAnalyzer(markerDetector = get()) }
-    viewModel { TracingViewModel(flashlightController = get(), transformCalculator = get()) }
+    viewModel { TracingViewModel(flashlightController = get(), transformCalculator = get(), settingsRepository = get()) }
     viewModel { SettingsViewModel(get()) }
 }

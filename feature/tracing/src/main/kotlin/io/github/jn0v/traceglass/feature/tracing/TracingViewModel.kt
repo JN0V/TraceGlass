@@ -11,6 +11,9 @@ import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
 import io.github.jn0v.traceglass.core.overlay.TrackingStatus
 import io.github.jn0v.traceglass.core.session.SessionData
 import io.github.jn0v.traceglass.core.session.SessionRepository
+import io.github.jn0v.traceglass.core.session.SettingsRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -24,7 +27,8 @@ class TracingViewModel(
     private val flashlightController: FlashlightController,
     private val transformCalculator: OverlayTransformCalculator = OverlayTransformCalculator(),
     private val trackingStateManager: TrackingStateManager = TrackingStateManager(),
-    private val sessionRepository: SessionRepository? = null
+    private val sessionRepository: SessionRepository? = null,
+    private val settingsRepository: SettingsRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -32,10 +36,29 @@ class TracingViewModel(
     )
     val uiState: StateFlow<TracingUiState> = _uiState.asStateFlow()
 
+    private var breakReminderEnabled = false
+    private var breakReminderIntervalMinutes = 30
+    private var audioFeedbackEnabled = false
+    private var breakTimerJob: Job? = null
+
     init {
         flashlightController.isTorchOn
             .onEach { torchOn -> _uiState.update { it.copy(isTorchOn = torchOn) } }
             .launchIn(viewModelScope)
+
+        settingsRepository?.settingsData
+            ?.onEach { data ->
+                val intervalChanged = breakReminderIntervalMinutes != data.breakReminderIntervalMinutes
+                val enabledChanged = breakReminderEnabled != data.breakReminderEnabled
+                breakReminderEnabled = data.breakReminderEnabled
+                breakReminderIntervalMinutes = data.breakReminderIntervalMinutes
+                audioFeedbackEnabled = data.audioFeedbackEnabled
+                _uiState.update { it.copy(audioFeedbackEnabled = data.audioFeedbackEnabled) }
+                if (intervalChanged || enabledChanged) {
+                    restartBreakTimer()
+                }
+            }
+            ?.launchIn(viewModelScope)
     }
 
     fun onPermissionResult(granted: Boolean) {
@@ -85,6 +108,7 @@ class TracingViewModel(
 
     fun onToggleSession() {
         _uiState.update { it.copy(isSessionActive = !it.isSessionActive) }
+        restartBreakTimer()
         viewModelScope.launch { saveSession() }
     }
 
@@ -123,6 +147,20 @@ class TracingViewModel(
                 isInvertedMode = data.isInvertedMode,
                 isSessionActive = data.isSessionActive
             )
+        }
+    }
+
+    fun onBreakReminderDismissed() {
+        _uiState.update { it.copy(showBreakReminder = false) }
+        restartBreakTimer()
+    }
+
+    private fun restartBreakTimer() {
+        breakTimerJob?.cancel()
+        if (!breakReminderEnabled || !_uiState.value.isSessionActive) return
+        breakTimerJob = viewModelScope.launch {
+            delay(breakReminderIntervalMinutes * 60_000L)
+            _uiState.update { it.copy(showBreakReminder = true) }
         }
     }
 
