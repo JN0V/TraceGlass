@@ -24,10 +24,7 @@ class FrameAnalyzer(
                 height = image.height,
                 rotation = image.imageInfo.rotationDegrees
             )
-            _latestResult.value = result.copy(
-                frameWidth = image.width,
-                frameHeight = image.height
-            )
+            _latestResult.value = result
         } finally {
             image.close()
         }
