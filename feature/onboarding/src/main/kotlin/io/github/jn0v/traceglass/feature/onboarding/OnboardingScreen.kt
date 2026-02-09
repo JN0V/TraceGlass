@@ -36,7 +36,8 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun OnboardingScreen(
     viewModel: OnboardingViewModel = koinViewModel(),
-    onComplete: () -> Unit
+    onComplete: () -> Unit,
+    onNavigateToGuide: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { 3 })
@@ -82,7 +83,10 @@ fun OnboardingScreen(
                     selectedTier = uiState.selectedTier,
                     onTierSelected = viewModel::onTierSelected
                 )
-                2 -> MarkerPreparationPage(selectedTier = uiState.selectedTier)
+                2 -> MarkerPreparationPage(
+                    selectedTier = uiState.selectedTier,
+                    onViewGuide = onNavigateToGuide
+                )
             }
         }
 

@@ -13,6 +13,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingRepository
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingScreen
+import io.github.jn0v.traceglass.feature.onboarding.SetupGuideScreen
 import io.github.jn0v.traceglass.feature.tracing.TracingScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -48,7 +49,15 @@ private fun TraceGlassNavigation(startOnboarding: Boolean) {
                     navController.navigate("tracing") {
                         popUpTo("onboarding") { inclusive = true }
                     }
+                },
+                onNavigateToGuide = {
+                    navController.navigate("setup-guide")
                 }
+            )
+        }
+        composable("setup-guide") {
+            SetupGuideScreen(
+                onBack = { navController.popBackStack() }
             )
         }
         composable("tracing") {
