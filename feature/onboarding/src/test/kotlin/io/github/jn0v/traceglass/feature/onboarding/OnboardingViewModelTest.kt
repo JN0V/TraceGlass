@@ -124,4 +124,58 @@ class OnboardingViewModelTest {
             assertEquals(1, repo.setCompletedCount)
         }
     }
+
+    @Nested
+    inner class Reopen {
+        @Test
+        fun `onReopen resets page to 0`() {
+            val vm = createViewModel()
+            vm.onPageChanged(2)
+            assertEquals(2, vm.uiState.value.currentPage)
+            vm.onReopen()
+            assertEquals(0, vm.uiState.value.currentPage)
+        }
+
+        @Test
+        fun `onReopen does not call resetOnboarding on repository`() {
+            val vm = createViewModel()
+            vm.onReopen()
+            assertEquals(0, repo.resetCount)
+        }
+
+        @Test
+        fun `onComplete after reopen does not persist to repository`() = runTest {
+            val vm = createViewModel()
+            vm.onReopen()
+            vm.onComplete()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(0, repo.setCompletedCount)
+        }
+
+        @Test
+        fun `onComplete after reopen still marks isCompleted true`() = runTest {
+            val vm = createViewModel()
+            vm.onReopen()
+            vm.onComplete()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertTrue(vm.uiState.value.isCompleted)
+        }
+
+        @Test
+        fun `onSkip after reopen does not persist to repository`() = runTest {
+            val vm = createViewModel()
+            vm.onReopen()
+            vm.onSkip()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(0, repo.setCompletedCount)
+        }
+
+        @Test
+        fun `onReopen preserves selected tier`() {
+            val vm = createViewModel()
+            vm.onTierSelected(SetupTier.FULL_KIT)
+            vm.onReopen()
+            assertEquals(SetupTier.FULL_KIT, vm.uiState.value.selectedTier)
+        }
+    }
 }

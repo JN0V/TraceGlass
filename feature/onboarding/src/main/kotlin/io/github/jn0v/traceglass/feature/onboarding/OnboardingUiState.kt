@@ -11,3 +11,8 @@ enum class SetupTier {
     SEMI_EQUIPPED,
     FULL_KIT
 }
+
+enum class OnboardingMode {
+    FIRST_TIME,
+    REOPENED
+}
