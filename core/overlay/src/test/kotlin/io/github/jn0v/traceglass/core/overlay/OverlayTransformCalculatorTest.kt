@@ -80,6 +80,56 @@ class OverlayTransformCalculatorTest {
     }
 
     @Nested
+    inner class Rotation {
+        @Test
+        fun `first detection sets reference angle with zero rotation`() {
+            val calc = OverlayTransformCalculator()
+            val m1 = marker(0, 100f, 100f)
+            val m2 = marker(1, 500f, 100f) // horizontal
+            val result = MarkerResult(listOf(m1, m2), 5L)
+            val transform = calc.compute(result, 1080f, 1920f)
+            assertEquals(0f, transform.rotation, 0.01f)
+        }
+
+        @Test
+        fun `rotation changes relative to reference angle`() {
+            val calc = OverlayTransformCalculator()
+            // First: horizontal (0 degrees)
+            val m1 = marker(0, 100f, 500f)
+            val m2 = marker(1, 500f, 500f)
+            calc.compute(MarkerResult(listOf(m1, m2), 5L), 1080f, 1920f)
+
+            // Second: 45 degrees
+            val m1b = marker(0, 100f, 100f)
+            val m2b = marker(1, 500f, 500f)
+            val transform = calc.compute(MarkerResult(listOf(m1b, m2b), 5L), 1080f, 1920f)
+            assertEquals(45f, transform.rotation, 0.1f)
+        }
+
+        @Test
+        fun `single marker returns zero rotation`() {
+            val calc = OverlayTransformCalculator()
+            val result = MarkerResult(listOf(marker(0, 300f, 300f)), 5L)
+            val transform = calc.compute(result, 1080f, 1920f)
+            assertEquals(0f, transform.rotation, 0.01f)
+        }
+
+        @Test
+        fun `resetReference clears rotation reference`() {
+            val calc = OverlayTransformCalculator()
+            val m1 = marker(0, 100f, 100f)
+            val m2 = marker(1, 500f, 500f)
+            calc.compute(MarkerResult(listOf(m1, m2), 5L), 1080f, 1920f)
+
+            calc.resetReference()
+
+            // After reset, next detection becomes new reference (rotation = 0)
+            val transform = calc.compute(MarkerResult(listOf(m1, m2), 5L), 1080f, 1920f)
+            assertEquals(0f, transform.rotation, 0.01f)
+        }
+    }
+
+    @Nested
     inner class Smoothing {
         @Test
         fun `smoothed transform converges to target over iterations`() {

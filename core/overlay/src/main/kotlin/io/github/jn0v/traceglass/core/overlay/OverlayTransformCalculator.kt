@@ -1,12 +1,14 @@
 package io.github.jn0v.traceglass.core.overlay
 
 import io.github.jn0v.traceglass.core.cv.MarkerResult
+import kotlin.math.atan2
 import kotlin.math.sqrt
 
 class OverlayTransformCalculator(
     private val smoothingFactor: Float = 0.3f
 ) {
     private var referenceSpacing: Float? = null
+    private var referenceAngle: Float? = null
 
     fun compute(result: MarkerResult, frameWidth: Float, frameHeight: Float): OverlayTransform {
         if (!result.isTracking) return OverlayTransform.IDENTITY
@@ -18,17 +20,27 @@ class OverlayTransformCalculator(
         val offsetX = centerX - frameWidth / 2f
         val offsetY = centerY - frameHeight / 2f
 
-        val scale = if (markers.size >= 2) {
+        val scale: Float
+        val rotation: Float
+
+        if (markers.size >= 2) {
             val spacing = computeMaxSpacing(markers)
             if (referenceSpacing == null) {
                 referenceSpacing = spacing
             }
-            spacing / referenceSpacing!!
+            scale = spacing / referenceSpacing!!
+
+            val angle = computeAngle(markers)
+            if (referenceAngle == null) {
+                referenceAngle = angle
+            }
+            rotation = angle - referenceAngle!!
         } else {
-            1f
+            scale = 1f
+            rotation = 0f
         }
 
-        return OverlayTransform(offsetX, offsetY, scale)
+        return OverlayTransform(offsetX, offsetY, scale, rotation)
     }
 
     fun computeSmoothed(
@@ -41,12 +53,23 @@ class OverlayTransformCalculator(
         return OverlayTransform(
             offsetX = lerp(previous.offsetX, target.offsetX, smoothingFactor),
             offsetY = lerp(previous.offsetY, target.offsetY, smoothingFactor),
-            scale = lerp(previous.scale, target.scale, smoothingFactor)
+            scale = lerp(previous.scale, target.scale, smoothingFactor),
+            rotation = lerp(previous.rotation, target.rotation, smoothingFactor)
         )
     }
 
-    fun resetReferenceSpacing() {
+    fun resetReference() {
         referenceSpacing = null
+        referenceAngle = null
+    }
+
+    private fun computeAngle(
+        markers: List<io.github.jn0v.traceglass.core.cv.DetectedMarker>
+    ): Float {
+        val sorted = markers.sortedBy { it.id }
+        val dx = sorted[1].centerX - sorted[0].centerX
+        val dy = sorted[1].centerY - sorted[0].centerY
+        return Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
     }
 
     private fun computeMaxSpacing(

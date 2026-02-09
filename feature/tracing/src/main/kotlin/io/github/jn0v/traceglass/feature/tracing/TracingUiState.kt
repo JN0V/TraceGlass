@@ -14,6 +14,7 @@ data class TracingUiState(
     val isInvertedMode: Boolean = false,
     val overlayOffset: Offset = Offset.Zero,
     val overlayScale: Float = 1f,
+    val overlayRotation: Float = 0f,
     val isSessionActive: Boolean = false,
     val areControlsVisible: Boolean = true,
     val trackingState: TrackingState = TrackingState.INACTIVE,

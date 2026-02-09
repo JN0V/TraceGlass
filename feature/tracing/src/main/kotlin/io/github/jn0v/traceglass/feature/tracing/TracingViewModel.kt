@@ -164,11 +164,7 @@ class TracingViewModel(
         }
     }
 
-    fun onMarkerResultReceived(
-        result: MarkerResult,
-        frameWidth: Float = 1080f,
-        frameHeight: Float = 1920f
-    ) {
+    fun onMarkerResultReceived(result: MarkerResult) {
         val status = trackingStateManager.onMarkerResult(result)
         val trackingState = when (status) {
             TrackingStatus.INACTIVE -> TrackingState.INACTIVE
@@ -177,12 +173,15 @@ class TracingViewModel(
         }
 
         if (result.isTracking) {
+            val frameWidth = result.frameWidth.toFloat().takeIf { it > 0f } ?: 1080f
+            val frameHeight = result.frameHeight.toFloat().takeIf { it > 0f } ?: 1920f
             val transform = transformCalculator.compute(result, frameWidth, frameHeight)
             _uiState.update {
                 it.copy(
                     trackingState = trackingState,
                     overlayOffset = Offset(transform.offsetX, transform.offsetY),
-                    overlayScale = transform.scale
+                    overlayScale = transform.scale,
+                    overlayRotation = transform.rotation
                 )
             }
         } else {
