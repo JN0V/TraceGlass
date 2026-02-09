@@ -37,10 +37,17 @@ import org.koin.androidx.compose.koinViewModel
 fun OnboardingScreen(
     viewModel: OnboardingViewModel = koinViewModel(),
     onComplete: () -> Unit,
-    onNavigateToGuide: () -> Unit = {}
+    onNavigateToGuide: () -> Unit = {},
+    mode: OnboardingMode = OnboardingMode.FIRST_TIME
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { 3 })
+
+    LaunchedEffect(mode) {
+        if (mode == OnboardingMode.REOPENED) {
+            viewModel.onReopen()
+        }
+    }
 
     LaunchedEffect(uiState.isCompleted) {
         if (uiState.isCompleted) onComplete()

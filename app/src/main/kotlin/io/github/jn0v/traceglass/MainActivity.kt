@@ -11,6 +11,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import io.github.jn0v.traceglass.feature.onboarding.OnboardingMode
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingRepository
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingScreen
 import io.github.jn0v.traceglass.feature.onboarding.SetupGuideScreen
@@ -61,7 +62,22 @@ private fun TraceGlassNavigation(startOnboarding: Boolean) {
             )
         }
         composable("tracing") {
-            TracingScreen()
+            TracingScreen(
+                onReopenOnboarding = {
+                    navController.navigate("onboarding-reopen")
+                }
+            )
+        }
+        composable("onboarding-reopen") {
+            OnboardingScreen(
+                mode = OnboardingMode.REOPENED,
+                onComplete = {
+                    navController.popBackStack()
+                },
+                onNavigateToGuide = {
+                    navController.navigate("setup-guide")
+                }
+            )
         }
     }
 }
