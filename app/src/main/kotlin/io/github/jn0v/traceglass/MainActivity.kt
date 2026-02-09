@@ -16,6 +16,7 @@ import io.github.jn0v.traceglass.feature.onboarding.OnboardingRepository
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingScreen
 import io.github.jn0v.traceglass.feature.onboarding.SetupGuideScreen
 import io.github.jn0v.traceglass.feature.tracing.TracingScreen
+import io.github.jn0v.traceglass.feature.tracing.settings.SettingsScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.android.inject
@@ -63,6 +64,14 @@ private fun TraceGlassNavigation(startOnboarding: Boolean) {
         }
         composable("tracing") {
             TracingScreen(
+                onNavigateToSettings = {
+                    navController.navigate("settings")
+                }
+            )
+        }
+        composable("settings") {
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
                 onReopenOnboarding = {
                     navController.navigate("onboarding-reopen")
                 }
