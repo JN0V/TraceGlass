@@ -15,6 +15,8 @@ class OnboardingViewModel(
     private val _uiState = MutableStateFlow(OnboardingUiState())
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
 
+    private var isReopened = false
+
     fun onPageChanged(page: Int) {
         _uiState.update { it.copy(currentPage = page) }
     }
@@ -27,9 +29,16 @@ class OnboardingViewModel(
         _uiState.update { it.copy(currentPage = (it.currentPage + 1).coerceAtMost(2)) }
     }
 
+    fun onReopen() {
+        isReopened = true
+        _uiState.update { it.copy(currentPage = 0) }
+    }
+
     fun onComplete() {
         viewModelScope.launch {
-            repository.setOnboardingCompleted()
+            if (!isReopened) {
+                repository.setOnboardingCompleted()
+            }
             _uiState.update { it.copy(isCompleted = true) }
         }
     }
