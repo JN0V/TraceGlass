@@ -71,7 +71,7 @@ fun TierSelectionPage(
                 label = {
                     Text(
                         when (tier) {
-                            SetupTier.FULL_DIY -> "Full DIY — Draw your own markers"
+                            SetupTier.FULL_DIY -> "Full DIY — Print your own markers"
                             SetupTier.SEMI_EQUIPPED -> "Semi-equipped — Printed markers"
                             SetupTier.FULL_KIT -> "Full kit — Printed markers + stand"
                         }
@@ -104,11 +104,11 @@ fun MarkerPreparationPage(
         Text(
             text = when (selectedTier) {
                 SetupTier.FULL_DIY ->
-                    "Draw two distinct markers on paper (e.g., a heart and a star). Place them 10-15 cm apart on your drawing surface. The app will detect them to stabilize your overlay."
+                    "Print two ArUco markers (ID #0 and #1) at about 2 cm each. Tape them at opposite corners of your drawing area (e.g. top-left and bottom-right)."
                 SetupTier.SEMI_EQUIPPED ->
-                    "Print the ArUco marker sheet from the setup guide. Cut out markers #0 and #1, and place them 10-15 cm apart on your drawing surface."
+                    "Print the ArUco marker sheet from the setup guide. Cut out markers #0 and #1, and tape them at opposite corners of your drawing area."
                 SetupTier.FULL_KIT ->
-                    "Print the ArUco marker sheet and set up your phone stand. Place markers #0 and #1 about 10-15 cm apart, then mount your phone above the surface."
+                    "Print the ArUco marker sheet and set up your phone stand. Tape markers #0 and #1 at opposite corners of your drawing area, then mount your phone above."
             },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center

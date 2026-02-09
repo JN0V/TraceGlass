@@ -301,7 +301,7 @@ class TracingViewModelTest {
         @Test
         fun `onMarkerResultReceived with markers sets TRACKING`() {
             val viewModel = createViewModel()
-            val result = MarkerResult(listOf(marker(0, 100f, 200f)), 5L)
+            val result = MarkerResult(listOf(marker(0, 100f, 200f)), 5L, 1080, 1920)
             viewModel.onMarkerResultReceived(result)
             assertEquals(TrackingState.TRACKING, viewModel.uiState.value.trackingState)
         }
@@ -311,7 +311,7 @@ class TracingViewModelTest {
             var time = 0L
             val manager = TrackingStateManager(lostTimeoutMs = 500L, timeProvider = { time })
             val viewModel = createViewModel(trackingStateManager = manager)
-            viewModel.onMarkerResultReceived(MarkerResult(listOf(marker(0, 100f, 200f)), 5L))
+            viewModel.onMarkerResultReceived(MarkerResult(listOf(marker(0, 100f, 200f)), 5L, 1080, 1920))
             time = 600L
             viewModel.onMarkerResultReceived(MarkerResult(emptyList(), 5L))
             assertEquals(TrackingState.LOST, viewModel.uiState.value.trackingState)
@@ -322,7 +322,7 @@ class TracingViewModelTest {
             var time = 0L
             val manager = TrackingStateManager(lostTimeoutMs = 500L, timeProvider = { time })
             val viewModel = createViewModel(trackingStateManager = manager)
-            viewModel.onMarkerResultReceived(MarkerResult(listOf(marker(0, 100f, 200f)), 5L))
+            viewModel.onMarkerResultReceived(MarkerResult(listOf(marker(0, 100f, 200f)), 5L, 1080, 1920))
             time = 200L
             viewModel.onMarkerResultReceived(MarkerResult(emptyList(), 5L))
             assertEquals(TrackingState.TRACKING, viewModel.uiState.value.trackingState)
@@ -332,8 +332,7 @@ class TracingViewModelTest {
         fun `tracking updates overlay offset from marker center`() {
             val viewModel = createViewModel()
             viewModel.onMarkerResultReceived(
-                MarkerResult(listOf(marker(0, 540f, 960f)), 5L),
-                frameWidth = 1080f, frameHeight = 1920f
+                MarkerResult(listOf(marker(0, 540f, 960f)), 5L, 1080, 1920)
             )
             assertEquals(0f, viewModel.uiState.value.overlayOffset.x, 1f)
             assertEquals(0f, viewModel.uiState.value.overlayOffset.y, 1f)
@@ -343,10 +342,19 @@ class TracingViewModelTest {
         fun `tracking with off-center marker shifts overlay`() {
             val viewModel = createViewModel()
             viewModel.onMarkerResultReceived(
-                MarkerResult(listOf(marker(0, 800f, 960f)), 5L),
-                frameWidth = 1080f, frameHeight = 1920f
+                MarkerResult(listOf(marker(0, 800f, 960f)), 5L, 1080, 1920)
             )
             assertTrue(viewModel.uiState.value.overlayOffset.x > 0f)
+        }
+
+        @Test
+        fun `tracking with two markers computes rotation`() {
+            val viewModel = createViewModel()
+            // First result: horizontal markers (sets reference)
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(marker(0, 100f, 500f), marker(1, 500f, 500f)), 5L, 1080, 1920)
+            )
+            assertEquals(0f, viewModel.uiState.value.overlayRotation, 0.1f)
         }
     }
 

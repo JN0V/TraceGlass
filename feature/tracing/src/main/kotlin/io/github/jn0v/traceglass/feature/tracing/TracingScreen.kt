@@ -137,6 +137,7 @@ fun TracingScreen(
                 onToggleInvertedMode = viewModel::onToggleInvertedMode,
                 overlayOffset = uiState.overlayOffset,
                 overlayScale = uiState.overlayScale,
+                overlayRotation = uiState.overlayRotation,
                 onOverlayDrag = viewModel::onOverlayDrag,
                 onOverlayScale = viewModel::onOverlayScale,
                 isSessionActive = uiState.isSessionActive,
@@ -184,6 +185,7 @@ private fun CameraPreviewContent(
     onToggleInvertedMode: () -> Unit,
     overlayOffset: Offset,
     overlayScale: Float,
+    overlayRotation: Float,
     onOverlayDrag: (Offset) -> Unit,
     onOverlayScale: (Float) -> Unit,
     isSessionActive: Boolean,
@@ -245,6 +247,7 @@ private fun CameraPreviewContent(
                         translationY = overlayOffset.y
                         scaleX = overlayScale
                         scaleY = overlayScale
+                        rotationZ = overlayRotation
                     }
                     .alpha(effectiveOpacity)
                     .pointerInput(Unit) {

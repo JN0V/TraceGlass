@@ -1,6 +1,5 @@
 package io.github.jn0v.traceglass.feature.onboarding
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,9 +28,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
@@ -114,46 +109,36 @@ private fun SectionSelector(
 private fun MarkerGuideContent() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            text = "DIY Marker Drawing Guide",
+            text = "ArUco Marker Guide",
             style = MaterialTheme.typography.headlineSmall
         )
         Text(
-            text = "Draw these 5 shapes on paper to use as tracking markers. Make each shape about 3 cm wide and space them 10\u201315 cm apart on your drawing surface.",
+            text = "TraceGlass uses ArUco markers (small black-and-white grid patterns) for tracking. Place two markers at opposite corners of your drawing area.",
             style = MaterialTheme.typography.bodyLarge
         )
 
-        MarkerShapeCard(
-            drawableRes = R.drawable.ic_marker_heart,
-            shapeName = "Heart",
-            instructions = "Draw a symmetrical heart shape. Start from the top center, curve down to the left, come to a point at the bottom, then curve back up to the right."
+        StepCard(
+            step = "1",
+            title = "Print or display markers",
+            instructions = "Download the marker sheet from the link below, or search for \"ArUco 4x4 marker 0\" and \"ArUco 4x4 marker 1\" online. Print them at about 2 cm each."
         )
-        MarkerShapeCard(
-            drawableRes = R.drawable.ic_marker_star,
-            shapeName = "Star",
-            instructions = "Draw a 5-pointed star. Start at the top point and draw each line connecting alternate points without lifting your pen."
+        StepCard(
+            step = "2",
+            title = "Place at opposite corners",
+            instructions = "Cut out markers #0 and #1. Tape them at two opposite corners of your drawing area (e.g. top-left and bottom-right), just outside the zone you want to trace."
         )
-        MarkerShapeCard(
-            drawableRes = R.drawable.ic_marker_cross,
-            shapeName = "Cross",
-            instructions = "Draw a plus sign (+) with equal-length arms. Use a ruler for clean straight lines."
-        )
-        MarkerShapeCard(
-            drawableRes = R.drawable.ic_marker_circle,
-            shapeName = "Circle",
-            instructions = "Draw a circle freehand or trace around a coin or bottle cap for a clean edge."
-        )
-        MarkerShapeCard(
-            drawableRes = R.drawable.ic_marker_diamond,
-            shapeName = "Diamond",
-            instructions = "Draw a diamond (rotated square). Four equal sides meeting at points at the top, bottom, left, and right."
+        StepCard(
+            step = "3",
+            title = "Keep markers visible",
+            instructions = "Make sure both markers stay visible to the camera while you draw. Avoid covering them with your hand or paper."
         )
     }
 }
 
 @Composable
-private fun MarkerShapeCard(
-    drawableRes: Int,
-    shapeName: String,
+private fun StepCard(
+    step: String,
+    title: String,
     instructions: String
 ) {
     Card(
@@ -163,19 +148,17 @@ private fun MarkerShapeCard(
             modifier = Modifier
                 .padding(16.dp)
                 .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
-            Image(
-                painter = painterResource(id = drawableRes),
-                contentDescription = "$shapeName marker shape",
-                modifier = Modifier
-                    .size(64.dp)
-                    .semantics { contentDescription = "$shapeName marker outline" }
+            Text(
+                text = step,
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = shapeName,
+                    text = title,
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(modifier = Modifier.height(4.dp))
