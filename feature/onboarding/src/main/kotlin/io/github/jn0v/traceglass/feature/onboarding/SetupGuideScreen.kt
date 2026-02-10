@@ -129,6 +129,11 @@ private fun MarkerGuideContent() {
         )
         StepCard(
             step = "3",
+            title = "Position your phone",
+            instructions = "Place your phone about 25\u201330 cm above the drawing surface, camera pointing down. It should be high enough to see both markers, but low enough to trace comfortably."
+        )
+        StepCard(
+            step = "4",
             title = "Keep markers visible",
             instructions = "Make sure both markers stay visible to the camera while you draw. Avoid covering them with your hand or paper."
         )
@@ -179,21 +184,21 @@ private fun MacGyverGuideContent() {
             style = MaterialTheme.typography.headlineSmall
         )
         Text(
-            text = "No tripod? No problem. Use everyday objects to hold your phone above your drawing surface.",
+            text = "No tripod? No problem. Use everyday objects to hold your phone about 25\u201330 cm above your drawing surface, camera pointing down.",
             style = MaterialTheme.typography.bodyLarge
         )
 
         StandOptionCard(
             title = "Glass of Water",
-            instructions = "Place a tall glass of water next to your paper. Lean your phone against the glass at a slight angle, camera pointing down at the drawing surface. The glass provides stable support and the water adds weight."
+            instructions = "Place a tall glass of water next to your paper. Lean your phone against it, camera pointing down. The glass provides stable support and the water adds weight. Aim for about 25\u201330 cm above the surface."
         )
         StandOptionCard(
             title = "Stack of Books",
-            instructions = "Stack 2\u20133 books at the edge of your desk. Prop your phone between the top two books, angled downward. Adjust the angle by changing how far the phone slides between the books."
+            instructions = "Stack 3\u20134 books at the edge of your desk to reach about 25\u201330 cm high. Prop your phone between the top two books, angled downward toward your drawing area."
         )
         StandOptionCard(
             title = "Box or Container",
-            instructions = "Place a small box or container upside down near your paper. Balance your phone on the edge with the camera hanging over, pointing down at your drawing surface. Use a rubber band to secure if needed."
+            instructions = "Place a box or container (about 25\u201330 cm tall) upside down near your paper. Balance your phone on the edge with the camera hanging over, pointing down. Use a rubber band to secure if needed."
         )
     }
 }
