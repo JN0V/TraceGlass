@@ -104,11 +104,11 @@ fun MarkerPreparationPage(
         Text(
             text = when (selectedTier) {
                 SetupTier.FULL_DIY ->
-                    "Print two ArUco markers (ID #0 and #1) at about 2 cm each. Tape them at opposite corners of your drawing area (e.g. top-left and bottom-right)."
+                    "Print two ArUco markers (ID #0 and #1) at about 2 cm each. Tape them at opposite corners of your drawing area. Prop your phone about 25\u201330 cm above the surface so the camera sees both markers."
                 SetupTier.SEMI_EQUIPPED ->
-                    "Print the ArUco marker sheet from the setup guide. Cut out markers #0 and #1, and tape them at opposite corners of your drawing area."
+                    "Print the ArUco marker sheet from the setup guide. Cut out markers #0 and #1, tape them at opposite corners. Position your phone about 25\u201330 cm above so both markers are visible."
                 SetupTier.FULL_KIT ->
-                    "Print the ArUco marker sheet and set up your phone stand. Tape markers #0 and #1 at opposite corners of your drawing area, then mount your phone above."
+                    "Print the ArUco marker sheet. Tape markers #0 and #1 at opposite corners. Mount your phone on the stand about 25\u201330 cm above the surface \u2014 high enough to see both markers, low enough to trace comfortably."
             },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
