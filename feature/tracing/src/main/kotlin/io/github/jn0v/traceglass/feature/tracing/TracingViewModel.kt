@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.jn0v.traceglass.core.camera.FlashlightController
 import io.github.jn0v.traceglass.core.cv.MarkerResult
+import io.github.jn0v.traceglass.core.overlay.OverlayTransform
 import io.github.jn0v.traceglass.core.overlay.OverlayTransformCalculator
 import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
 import io.github.jn0v.traceglass.core.overlay.TrackingStatus
@@ -40,6 +41,17 @@ class TracingViewModel(
     private var breakReminderIntervalMinutes = 30
     private var audioFeedbackEnabled = false
     private var breakTimerJob: Job? = null
+
+    private var previousTransform: OverlayTransform = OverlayTransform.IDENTITY
+    private var manualOffset: Offset = Offset.Zero
+    private var manualScaleFactor: Float = 1f
+    private var manualRotation: Float = 0f
+
+    // View dimensions for frame→screen coordinate scaling
+    private var viewWidth: Float = 1080f
+    private var viewHeight: Float = 1920f
+    private var lastFrameWidth: Float = 1080f
+    private var lastFrameHeight: Float = 1920f
 
     init {
         flashlightController.isTorchOn
@@ -95,14 +107,24 @@ class TracingViewModel(
     }
 
     fun onOverlayDrag(delta: Offset) {
-        _uiState.update {
-            it.copy(overlayOffset = it.overlayOffset + delta)
-        }
+        manualOffset += delta
+        updateOverlayFromCombined()
     }
 
     fun onOverlayScale(scaleFactor: Float) {
-        _uiState.update {
-            it.copy(overlayScale = it.overlayScale * scaleFactor)
+        manualScaleFactor *= scaleFactor
+        updateOverlayFromCombined()
+    }
+
+    fun onOverlayRotate(angleDelta: Float) {
+        manualRotation += angleDelta
+        updateOverlayFromCombined()
+    }
+
+    fun setViewDimensions(width: Float, height: Float) {
+        if (width > 0f && height > 0f) {
+            viewWidth = width
+            viewHeight = height
         }
     }
 
@@ -172,21 +194,45 @@ class TracingViewModel(
             TrackingStatus.LOST -> TrackingState.LOST
         }
 
-        if (result.isTracking) {
-            val frameWidth = result.frameWidth.toFloat().takeIf { it > 0f } ?: 1080f
-            val frameHeight = result.frameHeight.toFloat().takeIf { it > 0f } ?: 1920f
-            val transform = transformCalculator.compute(result, frameWidth, frameHeight)
-            _uiState.update {
-                it.copy(
-                    trackingState = trackingState,
-                    detectedMarkerCount = result.markerCount,
-                    overlayOffset = Offset(transform.offsetX, transform.offsetY),
-                    overlayScale = transform.scale,
-                    overlayRotation = transform.rotation
-                )
-            }
-        } else {
-            _uiState.update { it.copy(trackingState = trackingState, detectedMarkerCount = 0) }
+        val frameW = result.frameWidth.toFloat().takeIf { it > 0f } ?: lastFrameWidth
+        val frameH = result.frameHeight.toFloat().takeIf { it > 0f } ?: lastFrameHeight
+        lastFrameWidth = frameW
+        lastFrameHeight = frameH
+
+        val transform = transformCalculator.computeSmoothed(
+            result, frameW, frameH, previousTransform
+        )
+        previousTransform = transform
+
+        _uiState.update {
+            it.copy(
+                trackingState = trackingState,
+                detectedMarkerCount = result.markerCount
+            )
+        }
+        updateOverlayFromCombined()
+    }
+
+    /**
+     * Computes the preview scale factor (FILL_CENTER behavior):
+     * the camera preview is scaled uniformly to fill the view,
+     * so frame offsets must be multiplied by this factor to match screen pixels.
+     */
+    private fun previewScale(): Float {
+        return maxOf(viewWidth / lastFrameWidth, viewHeight / lastFrameHeight)
+    }
+
+    private fun updateOverlayFromCombined() {
+        val scale = previewScale()
+        _uiState.update {
+            it.copy(
+                overlayOffset = Offset(
+                    previousTransform.offsetX * scale + manualOffset.x,
+                    previousTransform.offsetY * scale + manualOffset.y
+                ),
+                overlayScale = previousTransform.scale * manualScaleFactor,
+                overlayRotation = previousTransform.rotation + manualRotation
+            )
         }
     }
 }

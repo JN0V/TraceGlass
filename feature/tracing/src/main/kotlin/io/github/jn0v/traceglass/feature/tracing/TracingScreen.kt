@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -56,6 +56,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -140,6 +141,8 @@ fun TracingScreen(
                 overlayRotation = uiState.overlayRotation,
                 onOverlayDrag = viewModel::onOverlayDrag,
                 onOverlayScale = viewModel::onOverlayScale,
+                onOverlayRotate = viewModel::onOverlayRotate,
+                onSetViewDimensions = viewModel::setViewDimensions,
                 isSessionActive = uiState.isSessionActive,
                 areControlsVisible = uiState.areControlsVisible,
                 onToggleSession = viewModel::onToggleSession,
@@ -188,6 +191,8 @@ private fun CameraPreviewContent(
     overlayRotation: Float,
     onOverlayDrag: (Offset) -> Unit,
     onOverlayScale: (Float) -> Unit,
+    onOverlayRotate: (Float) -> Unit,
+    onSetViewDimensions: (Float, Float) -> Unit,
     isSessionActive: Boolean,
     areControlsVisible: Boolean,
     onToggleSession: () -> Unit,
@@ -213,9 +218,9 @@ private fun CameraPreviewContent(
         }
     }
 
-    DisposableEffect(isSessionActive) {
+    DisposableEffect(overlayImageUri) {
         val window = (context as? android.app.Activity)?.window
-        if (isSessionActive) {
+        if (overlayImageUri != null) {
             window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -225,7 +230,12 @@ private fun CameraPreviewContent(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .onSizeChanged { size ->
+            onSetViewDimensions(size.width.toFloat(), size.height.toFloat())
+        }
+    ) {
         AndroidView(
             factory = { context ->
                 PreviewView(context).also { previewView ->
@@ -251,9 +261,10 @@ private fun CameraPreviewContent(
                     }
                     .alpha(effectiveOpacity)
                     .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
+                        detectTransformGestures { _, pan, zoom, rotation ->
                             onOverlayDrag(pan)
                             if (zoom != 1f) onOverlayScale(zoom)
+                            if (rotation != 0f) onOverlayRotate(rotation)
                         }
                     },
                 contentScale = ContentScale.Fit,
@@ -278,6 +289,7 @@ private fun CameraPreviewContent(
                 onClick = onPickImage,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
                     .padding(16.dp)
                     .size(48.dp)
             ) {
@@ -303,6 +315,7 @@ private fun CameraPreviewContent(
                     onClick = onToggleSession,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
                         .padding(16.dp)
                         .size(56.dp),
                     containerColor = if (isSessionActive)
@@ -341,6 +354,7 @@ private fun CameraPreviewContent(
                     onClick = onToggleTorch,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
+                        .navigationBarsPadding()
                         .padding(16.dp)
                         .size(48.dp)
                 ) {
@@ -366,6 +380,7 @@ private fun CameraPreviewContent(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
                 .padding(bottom = 80.dp)
         )
     }
