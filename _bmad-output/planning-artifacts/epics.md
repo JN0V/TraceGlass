@@ -824,3 +824,35 @@ So that I can identify TraceGlass on my home screen and know its version and lic
 **Then** the app name, version, and build number are shown
 **And** open-source license information is accessible
 **And** a link to the project repository is provided
+
+## Epic 8: Advanced Tracking & Perspective
+
+Enhanced tracking features that improve overlay accuracy beyond simple translation, scale, and rotation.
+
+### Story 8.1: Perspective Correction via Marker Homography
+
+As a user,
+I want the overlay image to automatically compensate for the angle between my phone and the drawing surface,
+So that the projected image lines up accurately with my paper even when my phone isn't perfectly parallel.
+
+**Acceptance Criteria:**
+
+**Given** two markers are detected and the phone is perfectly parallel to the surface
+**When** the overlay is displayed
+**Then** the overlay renders identically to the current behavior (no regression)
+
+**Given** two markers are detected and the phone is tilted relative to the surface
+**When** the overlay is displayed
+**Then** the overlay is warped with a perspective correction so that its projection on the paper matches the reference image geometry
+
+**Given** perspective correction is active
+**When** the phone tilt changes smoothly
+**Then** the overlay correction updates smoothly without jitter (temporal smoothing)
+
+**Given** only one marker is detected
+**When** the overlay is displayed
+**Then** perspective correction is disabled and the overlay uses the current affine transform (translation + scale + rotation only)
+
+**Given** the user opens Settings
+**When** they look at the tracking section
+**Then** a toggle "Perspective correction" is available (enabled by default)

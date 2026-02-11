@@ -22,8 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.filled.FlashlightOn
+import androidx.compose.material.icons.filled.FlashlightOff
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
@@ -345,7 +345,7 @@ private fun CameraPreviewContent(
                         .size(48.dp)
                 ) {
                     Icon(
-                        imageVector = if (isTorchOn) Icons.Filled.Star else Icons.Outlined.Star,
+                        imageVector = if (isTorchOn) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
                         contentDescription = if (isTorchOn) "Turn off flashlight" else "Turn on flashlight"
                     )
                 }
