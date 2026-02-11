@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 class OverlayTransformCalculatorTest {
 
@@ -370,6 +371,389 @@ class OverlayTransformCalculatorTest {
                         "Overshoot past target at iteration $it: ${next.offsetX} > $targetX")
                 }
                 prev = next
+            }
+        }
+    }
+
+    /**
+     * Tests for delta-based corner estimation when markers are hidden.
+     * Verifies that the 4th (or 3rd/2nd) corner can be accurately estimated
+     * from the remaining visible markers using frame-to-frame delta transforms.
+     *
+     * Convention: marker IDs 0-3 map to paper corners TL, TR, BR, BL.
+     * extractOuterCorners uses marker.corners[id] as the paper corner position.
+     */
+    @Nested
+    inner class CornerEstimation {
+
+        private val frameW = 1280f
+        private val frameH = 720f
+        private val paperW = 400f
+        private val paperH = 566f // 400 * 297/210 ≈ A4 ratio
+
+        /** A4 paper corners centered in frame: [TL, TR, BR, BL]. */
+        private fun a4Corners(): List<Pair<Float, Float>> {
+            val cx = frameW / 2f; val cy = frameH / 2f
+            return listOf(
+                Pair(cx - paperW / 2, cy - paperH / 2),
+                Pair(cx + paperW / 2, cy - paperH / 2),
+                Pair(cx + paperW / 2, cy + paperH / 2),
+                Pair(cx - paperW / 2, cy + paperH / 2)
+            )
+        }
+
+        /**
+         * Creates a marker where corners[id] is exactly at [paperCorner].
+         * The marker is axis-aligned with the given size.
+         */
+        private fun markerAtPaperCorner(
+            id: Int,
+            paperCorner: Pair<Float, Float>,
+            markerSize: Float = 30f
+        ): DetectedMarker {
+            val s = markerSize / 2f
+            val offsets = listOf(
+                Pair(-s, -s), Pair(+s, -s), Pair(+s, +s), Pair(-s, +s)
+            )
+            val cx = paperCorner.first - offsets[id].first
+            val cy = paperCorner.second - offsets[id].second
+            val corners = offsets.map { (dx, dy) -> Pair(cx + dx, cy + dy) }
+            return DetectedMarker(id, cx, cy, corners, 1f)
+        }
+
+        private fun markersForCorners(corners: List<Pair<Float, Float>>): List<DetectedMarker> =
+            (0..3).map { markerAtPaperCorner(it, corners[it]) }
+
+        private fun rotateCorners(
+            corners: List<Pair<Float, Float>>, angleDeg: Float
+        ): List<Pair<Float, Float>> {
+            val cx = corners.map { it.first }.average().toFloat()
+            val cy = corners.map { it.second }.average().toFloat()
+            val rad = Math.toRadians(angleDeg.toDouble())
+            val c = cos(rad).toFloat(); val s = sin(rad).toFloat()
+            return corners.map { (x, y) ->
+                val dx = x - cx; val dy = y - cy
+                Pair(cx + dx * c - dy * s, cy + dx * s + dy * c)
+            }
+        }
+
+        /**
+         * Simulates perspective tilt: paper rotated around its horizontal center axis.
+         * Positive [tiltDeg] tilts the paper top away from camera (top shrinks, bottom grows).
+         */
+        private fun perspectiveTilt(
+            corners: List<Pair<Float, Float>>,
+            tiltDeg: Float,
+            focalLength: Float = 800f
+        ): List<Pair<Float, Float>> {
+            val cx = corners.map { it.first }.average().toFloat()
+            val cy = corners.map { it.second }.average().toFloat()
+            val rad = Math.toRadians(tiltDeg.toDouble())
+            val cosT = cos(rad).toFloat(); val sinT = sin(rad).toFloat()
+            return corners.map { (x, y) ->
+                val dx = x - cx; val dy = y - cy
+                val y3d = dy * cosT
+                val z3d = -dy * sinT
+                val depth = focalLength + z3d
+                if (depth < 1f) Pair(x, y)
+                else Pair(cx + dx * focalLength / depth, cy + y3d * focalLength / depth)
+            }
+        }
+
+        private fun errorPx(a: Pair<Float, Float>, b: Pair<Float, Float>): Float {
+            val dx = a.first - b.first; val dy = a.second - b.second
+            return sqrt(dx * dx + dy * dy)
+        }
+
+        private fun f(v: Float) = "%.2f".format(v)
+
+        private fun assertCornerClose(
+            expected: Pair<Float, Float>, actual: Pair<Float, Float>,
+            tolerance: Float, msg: String = ""
+        ) {
+            val dx = abs(expected.first - actual.first)
+            val dy = abs(expected.second - actual.second)
+            assertTrue(dx < tolerance && dy < tolerance,
+                "$msg expected (${f(expected.first)}, ${f(expected.second)}), " +
+                    "got (${f(actual.first)}, ${f(actual.second)}), " +
+                    "delta=(${f(dx)}, ${f(dy)}) tolerance=$tolerance")
+        }
+
+        /** Feeds all 4 markers for 2 frames to establish reference + prevSmooth. */
+        private fun initCalculator(corners: List<Pair<Float, Float>>): OverlayTransformCalculator {
+            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
+            val mr = MarkerResult(markersForCorners(corners), 0L, frameW.toInt(), frameH.toInt())
+            calc.compute(mr, frameW, frameH) // frame 1: set reference
+            calc.compute(mr, frameW, frameH) // frame 2: set prevSmooth
+            return calc
+        }
+
+        /**
+         * Calibrates with a tilted view so focal length can be estimated.
+         * This enables the perspective-correct 4th corner estimation path.
+         */
+        private fun initCalibratedCalculator(
+            corners: List<Pair<Float, Float>>,
+            calibrationTiltDeg: Float = 10f
+        ): OverlayTransformCalculator {
+            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
+            val calibCorners = perspectiveTilt(corners, calibrationTiltDeg)
+            val mr = MarkerResult(markersForCorners(calibCorners), 0L, frameW.toInt(), frameH.toInt())
+            calc.compute(mr, frameW, frameH) // frame 1: set reference + estimate focal length
+            calc.compute(mr, frameW, frameH) // frame 2: set prevSmooth
+            return calc
+        }
+
+        // ── 3-marker affine estimation ──────────────────────────────
+
+        @Test
+        fun `3 markers - static scene hides each corner in turn`() {
+            val corners = a4Corners()
+            for (hiddenId in 0..3) {
+                val calc = initCalculator(corners)
+                val visible = markersForCorners(corners).filter { it.id != hiddenId }
+                val result = calc.compute(
+                    MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                )
+                assertCornerClose(
+                    corners[hiddenId], result.paperCornersFrame!![hiddenId], 0.1f,
+                    "Static, hidden=$hiddenId:"
+                )
+            }
+        }
+
+        @Test
+        fun `3 markers - pure translation estimates exactly`() {
+            val corners = a4Corners()
+            val moved = corners.map { (x, y) -> Pair(x + 50f, y + 30f) }
+            for (hiddenId in 0..3) {
+                val calc = initCalculator(corners)
+                val visible = markersForCorners(moved).filter { it.id != hiddenId }
+                val result = calc.compute(
+                    MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                )
+                assertCornerClose(
+                    moved[hiddenId], result.paperCornersFrame!![hiddenId], 0.5f,
+                    "Translation, hidden=$hiddenId:"
+                )
+            }
+        }
+
+        @Test
+        fun `3 markers - rotation 15 degrees estimates exactly`() {
+            val corners = a4Corners()
+            val rotated = rotateCorners(corners, 15f)
+            for (hiddenId in 0..3) {
+                val calc = initCalculator(corners)
+                val visible = markersForCorners(rotated).filter { it.id != hiddenId }
+                val result = calc.compute(
+                    MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                )
+                assertCornerClose(
+                    rotated[hiddenId], result.paperCornersFrame!![hiddenId], 1f,
+                    "Rotation 15°, hidden=$hiddenId:"
+                )
+            }
+        }
+
+        @Test
+        fun `3 markers - perspective tilt 20 degrees single step`() {
+            // With perspective-correct estimation using paper geometry + focal length,
+            // the 4th corner is projected through the constrained homography.
+            // Error drops from ~100px (affine) to <5px (perspective-correct).
+            // Calibration at 10° tilt provides the focal length estimate.
+            val corners = a4Corners()
+            val tilted = perspectiveTilt(corners, 20f)
+            for (hiddenId in 0..3) {
+                val calc = initCalibratedCalculator(corners)
+                val visible = markersForCorners(tilted).filter { it.id != hiddenId }
+                val result = calc.compute(
+                    MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                )
+                val err = errorPx(tilted[hiddenId], result.paperCornersFrame!![hiddenId])
+                assertTrue(err < 5f,
+                    "Tilt 20° single-step, hidden=$hiddenId: error=${f(err)}px")
+            }
+        }
+
+        @Test
+        fun `3 markers - gradual perspective tilt vs single step`() {
+            val corners = a4Corners()
+            val totalTilt = 20f
+            val steps = 20
+            val hiddenId = 2 // hide BR corner
+
+            // Gradual: 20 steps of 1°, always hiding marker 2
+            val calcGradual = initCalibratedCalculator(corners)
+            for (step in 1..steps) {
+                val tilted = perspectiveTilt(corners, step.toFloat())
+                val visible = markersForCorners(tilted).filter { it.id != hiddenId }
+                calcGradual.compute(
+                    MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                )
+            }
+            val finalTilted = perspectiveTilt(corners, totalTilt)
+            val gradualResult = calcGradual.compute(
+                MarkerResult(
+                    markersForCorners(finalTilted).filter { it.id != hiddenId },
+                    0L, frameW.toInt(), frameH.toInt()
+                ), frameW, frameH
+            )
+            val gradualError = errorPx(
+                finalTilted[hiddenId], gradualResult.paperCornersFrame!![hiddenId]
+            )
+
+            // Single step: jump from calibration to 20° in one frame
+            val calcSingle = initCalibratedCalculator(corners)
+            val singleResult = calcSingle.compute(
+                MarkerResult(
+                    markersForCorners(finalTilted).filter { it.id != hiddenId },
+                    0L, frameW.toInt(), frameH.toInt()
+                ), frameW, frameH
+            )
+            val singleError = errorPx(
+                finalTilted[hiddenId], singleResult.paperCornersFrame!![hiddenId]
+            )
+
+            // With perspective-correct estimation, both should be tight.
+            assertTrue(gradualError < 5f,
+                "Gradual 20° tilt: error=${f(gradualError)}px")
+            assertTrue(singleError < 5f,
+                "Single 20° tilt: error=${f(singleError)}px")
+        }
+
+        @Test
+        fun `3 markers - perspective tilt uses paper geometry when calibrated`() {
+            // Verify that after calibration (4 markers with tilt), hiding one marker at
+            // various tilt angles gives perspective-correct estimation.
+            // Each frame is independently estimated through constrained homography.
+            val corners = a4Corners()
+
+            for (tiltDeg in listOf(5f, 10f, 15f, 20f)) {
+                val calc = initCalibratedCalculator(corners)
+                val tilted = perspectiveTilt(corners, tiltDeg)
+                val hiddenId = 3 // BL corner
+                val visible = markersForCorners(tilted).filter { it.id != hiddenId }
+                val result = calc.compute(
+                    MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                )
+                val err = errorPx(tilted[hiddenId], result.paperCornersFrame!![hiddenId])
+                assertTrue(err < 5f,
+                    "Paper geometry tilt=${tiltDeg}°, hidden=$hiddenId: error=${f(err)}px")
+            }
+        }
+
+        // ── 2-marker similarity estimation ──────────────────────────
+
+        @Test
+        fun `2 markers - pure translation estimates exactly`() {
+            val corners = a4Corners()
+            val moved = corners.map { (x, y) -> Pair(x + 40f, y - 20f) }
+            val calc = initCalculator(corners)
+            val visible = markersForCorners(moved).filter { it.id in setOf(0, 1) }
+            val result = calc.compute(
+                MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+            )
+            val estimated = result.paperCornersFrame!!
+            for (hiddenId in listOf(2, 3)) {
+                assertCornerClose(
+                    moved[hiddenId], estimated[hiddenId], 1f,
+                    "2-marker translation, hidden=$hiddenId:"
+                )
+            }
+        }
+
+        @Test
+        fun `2 markers - rotation with diagonal pair`() {
+            val corners = a4Corners()
+            val rotated = rotateCorners(corners, 10f)
+            val calc = initCalculator(corners)
+            // Diagonal pair: markers 0 (TL) and 2 (BR)
+            val visible = markersForCorners(rotated).filter { it.id in setOf(0, 2) }
+            val result = calc.compute(
+                MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+            )
+            val estimated = result.paperCornersFrame!!
+            for (hiddenId in listOf(1, 3)) {
+                val err = errorPx(rotated[hiddenId], estimated[hiddenId])
+                assertTrue(err < 15f,
+                    "2-marker rotation 10°, hidden=$hiddenId: error=${f(err)}px")
+            }
+        }
+
+        // ── 1-marker translation estimation ─────────────────────────
+
+        @Test
+        fun `1 marker - pure translation estimates exactly`() {
+            val corners = a4Corners()
+            val moved = corners.map { (x, y) -> Pair(x + 30f, y + 15f) }
+            val calc = initCalculator(corners)
+            val visible = markersForCorners(moved).filter { it.id == 0 }
+            val result = calc.compute(
+                MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+            )
+            val estimated = result.paperCornersFrame!!
+            for (hiddenId in 1..3) {
+                assertCornerClose(
+                    moved[hiddenId], estimated[hiddenId], 1f,
+                    "1-marker translation, hidden=$hiddenId:"
+                )
+            }
+        }
+
+        @Test
+        fun `1 marker - rotation causes drift proportional to distance`() {
+            val corners = a4Corners()
+            val rotated = rotateCorners(corners, 5f)
+            val calc = initCalculator(corners)
+            val visible = markersForCorners(rotated).filter { it.id == 0 }
+            val result = calc.compute(
+                MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+            )
+            val estimated = result.paperCornersFrame!!
+            val err1 = errorPx(rotated[1], estimated[1])
+            val err2 = errorPx(rotated[2], estimated[2])
+            val err3 = errorPx(rotated[3], estimated[3])
+
+            // Translation-only can't handle rotation; error grows with distance from visible marker.
+            // Marker 2 (BR) is diagonal from marker 0 (TL) → largest distance → most error.
+            // For 5° rotation of a ~690px diagonal, expected drift ≈ 690 * sin(5°) ≈ 60px.
+            assertTrue(err2 >= err1 || err2 >= err3,
+                "Diagonal corner should have comparable or larger error: " +
+                    "err1=${f(err1)}, err2=${f(err2)}, err3=${f(err3)}")
+            assertTrue(err2 < 70f,
+                "1-marker rotation 5°, diagonal: error=${f(err2)}px")
+        }
+
+        // ── Multi-frame stability ────────────────────────────────────
+
+        @Test
+        fun `recover full accuracy when all 4 markers return`() {
+            val corners = a4Corners()
+            val calc = initCalculator(corners)
+
+            // Hide marker 2 for several frames with movement
+            for (step in 1..5) {
+                val moved = corners.map { (x, y) -> Pair(x + step * 10f, y) }
+                val visible = markersForCorners(moved).filter { it.id != 2 }
+                calc.compute(
+                    MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                )
+            }
+
+            // Return all 4 markers at a new position
+            val finalCorners = corners.map { (x, y) -> Pair(x + 80f, y + 20f) }
+            val result = calc.compute(
+                MarkerResult(
+                    markersForCorners(finalCorners), 0L, frameW.toInt(), frameH.toInt()
+                ), frameW, frameH
+            )
+            val estimated = result.paperCornersFrame!!
+            for (id in 0..3) {
+                assertCornerClose(
+                    finalCorners[id], estimated[id], 0.1f,
+                    "Recovery with all 4, corner=$id:"
+                )
             }
         }
     }
