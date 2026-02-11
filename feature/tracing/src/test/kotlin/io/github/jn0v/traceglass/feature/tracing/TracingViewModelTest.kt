@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.ui.geometry.Offset
 import io.github.jn0v.traceglass.core.cv.DetectedMarker
 import io.github.jn0v.traceglass.core.cv.MarkerResult
+import io.github.jn0v.traceglass.core.overlay.OverlayTransformCalculator
 import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
 import io.github.jn0v.traceglass.core.session.SessionData
 import io.mockk.every
@@ -26,6 +27,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TracingViewModelTest {
@@ -47,12 +51,31 @@ class TracingViewModelTest {
     private fun createViewModel(
         flashlightController: FakeFlashlightController = fakeFlashlight,
         trackingStateManager: TrackingStateManager? = null,
-        sessionRepository: FakeSessionRepository = FakeSessionRepository()
+        sessionRepository: FakeSessionRepository = FakeSessionRepository(),
+        transformCalculator: OverlayTransformCalculator? = null
     ) = TracingViewModel(
         flashlightController = flashlightController,
         trackingStateManager = trackingStateManager ?: TrackingStateManager(),
-        sessionRepository = sessionRepository
+        sessionRepository = sessionRepository,
+        transformCalculator = transformCalculator ?: OverlayTransformCalculator(smoothingFactor = 1f)
     )
+
+    private fun markerWithCorners(
+        id: Int, cx: Float, cy: Float,
+        size: Float = 50f, angleDeg: Float = 0f
+    ): DetectedMarker {
+        val halfSize = size / 2f
+        val rad = Math.toRadians(angleDeg.toDouble())
+        val cosA = cos(rad).toFloat()
+        val sinA = sin(rad).toFloat()
+        val corners = listOf(
+            Pair(cx - halfSize * cosA + halfSize * sinA, cy - halfSize * sinA - halfSize * cosA),
+            Pair(cx + halfSize * cosA + halfSize * sinA, cy + halfSize * sinA - halfSize * cosA),
+            Pair(cx + halfSize * cosA - halfSize * sinA, cy + halfSize * sinA + halfSize * cosA),
+            Pair(cx - halfSize * cosA - halfSize * sinA, cy - halfSize * sinA + halfSize * cosA)
+        )
+        return DetectedMarker(id, cx, cy, corners, 1f)
+    }
 
     @Nested
     inner class Permission {
@@ -185,7 +208,7 @@ class TracingViewModelTest {
         }
 
         @Test
-        fun `onOverlayDrag adds delta to offset`() {
+        fun `onOverlayDrag adds delta to manual offset`() {
             val viewModel = createViewModel()
             viewModel.onOverlayDrag(Offset(100f, 50f))
             assertEquals(Offset(100f, 50f), viewModel.uiState.value.overlayOffset)
@@ -212,6 +235,21 @@ class TracingViewModelTest {
             viewModel.onOverlayScale(2f)
             viewModel.onOverlayScale(0.5f)
             assertEquals(1f, viewModel.uiState.value.overlayScale, 0.001f)
+        }
+
+        @Test
+        fun `onOverlayRotate adds rotation delta`() {
+            val viewModel = createViewModel()
+            viewModel.onOverlayRotate(15f)
+            assertEquals(15f, viewModel.uiState.value.overlayRotation, 0.001f)
+        }
+
+        @Test
+        fun `onOverlayRotate accumulates`() {
+            val viewModel = createViewModel()
+            viewModel.onOverlayRotate(15f)
+            viewModel.onOverlayRotate(-5f)
+            assertEquals(10f, viewModel.uiState.value.overlayRotation, 0.001f)
         }
     }
 
@@ -289,9 +327,6 @@ class TracingViewModelTest {
 
     @Nested
     inner class MarkerTracking {
-        private fun marker(id: Int, cx: Float, cy: Float) =
-            DetectedMarker(id, cx, cy, emptyList(), 1f)
-
         @Test
         fun `initial tracking state is INACTIVE`() {
             val viewModel = createViewModel()
@@ -301,7 +336,9 @@ class TracingViewModelTest {
         @Test
         fun `onMarkerResultReceived with markers sets TRACKING`() {
             val viewModel = createViewModel()
-            val result = MarkerResult(listOf(marker(0, 100f, 200f)), 5L, 1080, 1920)
+            val result = MarkerResult(
+                listOf(markerWithCorners(0, 100f, 200f)), 5L, 1080, 1920
+            )
             viewModel.onMarkerResultReceived(result)
             assertEquals(TrackingState.TRACKING, viewModel.uiState.value.trackingState)
         }
@@ -311,7 +348,9 @@ class TracingViewModelTest {
             var time = 0L
             val manager = TrackingStateManager(lostTimeoutMs = 500L, timeProvider = { time })
             val viewModel = createViewModel(trackingStateManager = manager)
-            viewModel.onMarkerResultReceived(MarkerResult(listOf(marker(0, 100f, 200f)), 5L, 1080, 1920))
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 100f, 200f)), 5L, 1080, 1920)
+            )
             time = 600L
             viewModel.onMarkerResultReceived(MarkerResult(emptyList(), 5L))
             assertEquals(TrackingState.LOST, viewModel.uiState.value.trackingState)
@@ -322,7 +361,9 @@ class TracingViewModelTest {
             var time = 0L
             val manager = TrackingStateManager(lostTimeoutMs = 500L, timeProvider = { time })
             val viewModel = createViewModel(trackingStateManager = manager)
-            viewModel.onMarkerResultReceived(MarkerResult(listOf(marker(0, 100f, 200f)), 5L, 1080, 1920))
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 100f, 200f)), 5L, 1080, 1920)
+            )
             time = 200L
             viewModel.onMarkerResultReceived(MarkerResult(emptyList(), 5L))
             assertEquals(TrackingState.TRACKING, viewModel.uiState.value.trackingState)
@@ -330,9 +371,10 @@ class TracingViewModelTest {
 
         @Test
         fun `tracking updates overlay offset from marker center`() {
+            // Use smoothing=1 for instant tracking
             val viewModel = createViewModel()
             viewModel.onMarkerResultReceived(
-                MarkerResult(listOf(marker(0, 540f, 960f)), 5L, 1080, 1920)
+                MarkerResult(listOf(markerWithCorners(0, 540f, 960f)), 5L, 1080, 1920)
             )
             assertEquals(0f, viewModel.uiState.value.overlayOffset.x, 1f)
             assertEquals(0f, viewModel.uiState.value.overlayOffset.y, 1f)
@@ -342,7 +384,7 @@ class TracingViewModelTest {
         fun `tracking with off-center marker shifts overlay`() {
             val viewModel = createViewModel()
             viewModel.onMarkerResultReceived(
-                MarkerResult(listOf(marker(0, 800f, 960f)), 5L, 1080, 1920)
+                MarkerResult(listOf(markerWithCorners(0, 800f, 960f)), 5L, 1080, 1920)
             )
             assertTrue(viewModel.uiState.value.overlayOffset.x > 0f)
         }
@@ -351,10 +393,180 @@ class TracingViewModelTest {
         fun `tracking with two markers computes rotation`() {
             val viewModel = createViewModel()
             // First result: horizontal markers (sets reference)
+            val m1 = markerWithCorners(0, 100f, 500f)
+            val m2 = markerWithCorners(1, 500f, 500f)
             viewModel.onMarkerResultReceived(
-                MarkerResult(listOf(marker(0, 100f, 500f), marker(1, 500f, 500f)), 5L, 1080, 1920)
+                MarkerResult(listOf(m1, m2), 5L, 1080, 1920)
             )
             assertEquals(0f, viewModel.uiState.value.overlayRotation, 0.1f)
+        }
+
+        @Test
+        fun `lost tracking holds last known transform`() {
+            var time = 0L
+            val manager = TrackingStateManager(lostTimeoutMs = 500L, timeProvider = { time })
+            val viewModel = createViewModel(trackingStateManager = manager)
+
+            // Track a marker at off-center position
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 300f, 700f)), 5L, 1080, 1920)
+            )
+            val trackedOffset = viewModel.uiState.value.overlayOffset
+
+            // Lose markers after timeout
+            time = 600L
+            viewModel.onMarkerResultReceived(MarkerResult(emptyList(), 5L))
+
+            // Should hold last offset, not reset to zero
+            assertEquals(trackedOffset.x, viewModel.uiState.value.overlayOffset.x, 1f)
+            assertEquals(trackedOffset.y, viewModel.uiState.value.overlayOffset.y, 1f)
+        }
+    }
+
+    @Nested
+    inner class ManualAndMarkerInteraction {
+        @Test
+        fun `manual drag preserved after marker update`() {
+            val viewModel = createViewModel()
+
+            // Manual drag first
+            viewModel.onOverlayDrag(Offset(50f, 30f))
+
+            // Then marker detection
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 540f, 960f)), 5L, 1080, 1920)
+            )
+
+            // Manual offset should be additive (marker at center = 0 offset, plus manual 50,30)
+            assertEquals(50f, viewModel.uiState.value.overlayOffset.x, 2f)
+            assertEquals(30f, viewModel.uiState.value.overlayOffset.y, 2f)
+        }
+
+        @Test
+        fun `manual scale preserved after marker update`() {
+            val viewModel = createViewModel()
+
+            viewModel.onOverlayScale(2f)
+
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 540f, 960f)), 5L, 1080, 1920)
+            )
+
+            // marker scale=1 (first detection), manual=2 → combined=2
+            assertEquals(2f, viewModel.uiState.value.overlayScale, 0.1f)
+        }
+
+        @Test
+        fun `manual rotation preserved after marker update`() {
+            val viewModel = createViewModel()
+
+            viewModel.onOverlayRotate(25f)
+
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 540f, 960f)), 5L, 1080, 1920)
+            )
+
+            // marker rotation=0 (first detection sets reference), manual=25 → combined=25
+            assertEquals(25f, viewModel.uiState.value.overlayRotation, 1f)
+        }
+
+        @Test
+        fun `previewScale scales marker offset to screen coordinates`() {
+            val viewModel = createViewModel()
+
+            // View is 2x the frame size → previewScale = 2.0
+            viewModel.setViewDimensions(2160f, 3840f)
+
+            // Marker 100px right of center in frame coords
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 640f, 960f)), 5L, 1080, 1920)
+            )
+
+            // offset in frame = 640-540 = 100px, scaled by 2 = 200px
+            assertEquals(200f, viewModel.uiState.value.overlayOffset.x, 2f)
+        }
+
+        @Test
+        fun `marker update does not reset manual offset`() {
+            val viewModel = createViewModel()
+
+            viewModel.onOverlayDrag(Offset(100f, 0f))
+
+            // Multiple marker updates
+            repeat(5) {
+                viewModel.onMarkerResultReceived(
+                    MarkerResult(listOf(markerWithCorners(0, 540f, 960f)), 5L, 1080, 1920)
+                )
+            }
+
+            // Manual offset 100 should still be there
+            assertEquals(100f, viewModel.uiState.value.overlayOffset.x, 2f)
+        }
+    }
+
+    @Nested
+    inner class SmoothedTracking {
+        @Test
+        fun `smoothed tracking converges without large jumps`() {
+            // Use a realistic smoothing factor
+            val calc = OverlayTransformCalculator(smoothingFactor = 0.3f)
+            val viewModel = createViewModel(transformCalculator = calc)
+
+            // First frame at center
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 540f, 960f)), 5L, 1080, 1920)
+            )
+            val first = viewModel.uiState.value.overlayOffset
+
+            // Suddenly jump marker far away
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 900f, 960f)), 5L, 1080, 1920)
+            )
+            val second = viewModel.uiState.value.overlayOffset
+
+            // The full jump would be 360px (900-540). With smoothing 0.3, first step should be ~108px
+            val targetDelta = 360f
+            val actualDelta = second.x - first.x
+            assertTrue(actualDelta > 0, "Should move in the right direction")
+            assertTrue(actualDelta < targetDelta * 0.5f,
+                "Smoothing should dampen the jump: got $actualDelta expected less than ${targetDelta * 0.5f}")
+        }
+
+        @Test
+        fun `marker recovery after loss is smoothed`() {
+            var time = 0L
+            val manager = TrackingStateManager(lostTimeoutMs = 500L, timeProvider = { time })
+            val calc = OverlayTransformCalculator(smoothingFactor = 0.3f)
+            val viewModel = createViewModel(trackingStateManager = manager, transformCalculator = calc)
+
+            // Track at position A
+            val markerA = markerWithCorners(0, 300f, 700f)
+            repeat(20) {
+                viewModel.onMarkerResultReceived(
+                    MarkerResult(listOf(markerA), 5L, 1080, 1920)
+                )
+            }
+            val posA = viewModel.uiState.value.overlayOffset
+
+            // Lose markers
+            time = 600L
+            viewModel.onMarkerResultReceived(MarkerResult(emptyList(), 5L))
+            val held = viewModel.uiState.value.overlayOffset
+            assertEquals(posA.x, held.x, 2f)
+
+            // Recover at position B (different position)
+            time = 700L
+            val markerB = markerWithCorners(0, 700f, 700f)
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerB), 5L, 1080, 1920)
+            )
+            val afterRecovery = viewModel.uiState.value.overlayOffset
+
+            // Should NOT have snapped fully to B; should be smoothed between A and B
+            val fullJump = abs(700f - 300f) // 400px difference
+            val actualJump = abs(afterRecovery.x - held.x)
+            assertTrue(actualJump < fullJump * 0.5f,
+                "Recovery should be smoothed: jumped $actualJump of $fullJump")
         }
     }
 
