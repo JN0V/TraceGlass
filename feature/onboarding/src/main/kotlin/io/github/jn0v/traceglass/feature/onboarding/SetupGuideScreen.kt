@@ -238,7 +238,7 @@ private fun ExternalLinksSection() {
             enabled = false,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Printable marker sheet \u2014 coming soon")
+            Text("Printable marker sheet \u2014 see docs/aruco-markers-a4.pdf")
         }
         OutlinedButton(
             onClick = { },

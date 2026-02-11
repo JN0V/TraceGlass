@@ -54,7 +54,7 @@ class MarkerDetectorTest {
             detector.resultToReturn = MarkerResult(listOf(marker), 3L)
 
             val buffer = ByteBuffer.allocate(100)
-            val result = detector.detect(buffer, 640, 480, 0)
+            val result = detector.detect(buffer, 640, 480, 0, 0)
 
             assertTrue(result.isTracking)
             assertEquals(1, result.markerCount)
@@ -67,8 +67,8 @@ class MarkerDetectorTest {
             val buffer = ByteBuffer.allocate(100)
 
             assertEquals(0, detector.detectCallCount)
-            detector.detect(buffer, 640, 480, 0)
-            detector.detect(buffer, 640, 480, 0)
+            detector.detect(buffer, 640, 480, 0, 0)
+            detector.detect(buffer, 640, 480, 0, 0)
             assertEquals(2, detector.detectCallCount)
         }
 
@@ -76,7 +76,7 @@ class MarkerDetectorTest {
         fun `fake detector default returns no markers`() {
             val detector = FakeMarkerDetector()
             val buffer = ByteBuffer.allocate(100)
-            val result = detector.detect(buffer, 640, 480, 0)
+            val result = detector.detect(buffer, 640, 480, 0, 0)
 
             assertFalse(result.isTracking)
             assertEquals(0, result.markerCount)

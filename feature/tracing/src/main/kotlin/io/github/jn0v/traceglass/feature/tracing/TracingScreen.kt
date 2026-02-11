@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,11 +48,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -63,6 +66,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.rememberAsyncImagePainter
 import io.github.jn0v.traceglass.core.camera.CameraManager
+import io.github.jn0v.traceglass.core.overlay.MatrixUtils
 import io.github.jn0v.traceglass.feature.tracing.components.OpacityFab
 import io.github.jn0v.traceglass.feature.tracing.components.TrackingIndicator
 import io.github.jn0v.traceglass.feature.tracing.components.VisualModeControls
@@ -77,6 +81,8 @@ fun TracingScreen(
     onNavigateToSettings: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Collect render matrix as a separate State — read only in draw phase to avoid recomposition
+    val renderMatrixState = viewModel.renderMatrix.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
@@ -88,6 +94,7 @@ fun TracingScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> scope.launch { viewModel.saveSession() }
+                Lifecycle.Event.ON_RESUME -> cameraManager.reapplyZoom()
                 else -> {}
             }
         }
@@ -136,9 +143,7 @@ fun TracingScreen(
                 isInvertedMode = uiState.isInvertedMode,
                 onColorTintChanged = viewModel::onColorTintChanged,
                 onToggleInvertedMode = viewModel::onToggleInvertedMode,
-                overlayOffset = uiState.overlayOffset,
-                overlayScale = uiState.overlayScale,
-                overlayRotation = uiState.overlayRotation,
+                renderMatrixState = renderMatrixState,
                 onOverlayDrag = viewModel::onOverlayDrag,
                 onOverlayScale = viewModel::onOverlayScale,
                 onOverlayRotate = viewModel::onOverlayRotate,
@@ -186,9 +191,7 @@ private fun CameraPreviewContent(
     isInvertedMode: Boolean,
     onColorTintChanged: (ColorTint) -> Unit,
     onToggleInvertedMode: () -> Unit,
-    overlayOffset: Offset,
-    overlayScale: Float,
-    overlayRotation: Float,
+    renderMatrixState: State<FloatArray?>,
     onOverlayDrag: (Offset) -> Unit,
     onOverlayScale: (Float) -> Unit,
     onOverlayRotate: (Float) -> Unit,
@@ -247,17 +250,23 @@ private fun CameraPreviewContent(
 
         if (overlayImageUri != null) {
             val effectiveOpacity = if (isInvertedMode) 1f - overlayOpacity else overlayOpacity
+            // Cache objects to avoid per-draw allocations
+            val matrixObj = remember { android.graphics.Matrix() }
+            val identityValues = remember { MatrixUtils.identity() }
             Image(
                 painter = rememberAsyncImagePainter(model = overlayImageUri),
                 contentDescription = "Overlay reference image",
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        translationX = overlayOffset.x
-                        translationY = overlayOffset.y
-                        scaleX = overlayScale
-                        scaleY = overlayScale
-                        rotationZ = overlayRotation
+                    .drawWithContent {
+                        drawIntoCanvas { canvas ->
+                            // Read State.value here (draw phase only) — no recomposition triggered
+                            matrixObj.setValues(renderMatrixState.value ?: identityValues)
+                            canvas.nativeCanvas.save()
+                            canvas.nativeCanvas.concat(matrixObj)
+                            drawContent()
+                            canvas.nativeCanvas.restore()
+                        }
                     }
                     .alpha(effectiveOpacity)
                     .pointerInput(Unit) {

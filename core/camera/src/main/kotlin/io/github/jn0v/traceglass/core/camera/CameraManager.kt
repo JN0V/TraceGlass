@@ -11,4 +11,5 @@ interface CameraManager {
         imageAnalyzer: ImageAnalysis.Analyzer? = null
     )
     fun unbind()
+    fun reapplyZoom()
 }
