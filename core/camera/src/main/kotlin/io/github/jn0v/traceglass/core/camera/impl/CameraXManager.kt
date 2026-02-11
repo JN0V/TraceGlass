@@ -179,6 +179,10 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
         }
     }
 
+    override fun reapplyZoom() {
+        setWidestZoom(camera)
+    }
+
     companion object {
         private const val TAG = "CameraXManager"
     }

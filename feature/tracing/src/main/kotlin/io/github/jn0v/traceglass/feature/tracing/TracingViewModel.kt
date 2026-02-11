@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.jn0v.traceglass.core.camera.FlashlightController
 import io.github.jn0v.traceglass.core.cv.MarkerResult
+import io.github.jn0v.traceglass.core.overlay.HomographySolver
+import io.github.jn0v.traceglass.core.overlay.MatrixUtils
 import io.github.jn0v.traceglass.core.overlay.OverlayTransform
 import io.github.jn0v.traceglass.core.overlay.OverlayTransformCalculator
 import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
@@ -37,6 +39,10 @@ class TracingViewModel(
     )
     val uiState: StateFlow<TracingUiState> = _uiState.asStateFlow()
 
+    // Separate high-frequency flow for render matrix — avoids full tree recomposition
+    private val _renderMatrix = MutableStateFlow<FloatArray?>(null)
+    val renderMatrix: StateFlow<FloatArray?> = _renderMatrix.asStateFlow()
+
     private var breakReminderEnabled = false
     private var breakReminderIntervalMinutes = 30
     private var audioFeedbackEnabled = false
@@ -52,6 +58,11 @@ class TracingViewModel(
     private var viewHeight: Float = 1920f
     private var lastFrameWidth: Float = 1080f
     private var lastFrameHeight: Float = 1920f
+
+    // Cached preview→screen scale and coordinate transform matrices
+    // (recomputed only when dimensions change)
+    private var cachedPvScale: Float = 1f
+    private var cachedF2S: FloatArray = MatrixUtils.identity()
 
     init {
         flashlightController.isTorchOn
@@ -125,6 +136,7 @@ class TracingViewModel(
         if (width > 0f && height > 0f) {
             viewWidth = width
             viewHeight = height
+            recomputeCachedMatrices()
         }
     }
 
@@ -196,8 +208,11 @@ class TracingViewModel(
 
         val frameW = result.frameWidth.toFloat().takeIf { it > 0f } ?: lastFrameWidth
         val frameH = result.frameHeight.toFloat().takeIf { it > 0f } ?: lastFrameHeight
-        lastFrameWidth = frameW
-        lastFrameHeight = frameH
+        if (frameW != lastFrameWidth || frameH != lastFrameHeight) {
+            lastFrameWidth = frameW
+            lastFrameHeight = frameH
+            recomputeCachedMatrices()
+        }
 
         val transform = transformCalculator.computeSmoothed(
             result, frameW, frameH, previousTransform
@@ -213,26 +228,109 @@ class TracingViewModel(
         updateOverlayFromCombined()
     }
 
-    /**
-     * Computes the preview scale factor (FILL_CENTER behavior):
-     * the camera preview is scaled uniformly to fill the view,
-     * so frame offsets must be multiplied by this factor to match screen pixels.
-     */
-    private fun previewScale(): Float {
-        return maxOf(viewWidth / lastFrameWidth, viewHeight / lastFrameHeight)
+    private fun recomputeCachedMatrices() {
+        val pvScale = maxOf(viewWidth / lastFrameWidth, viewHeight / lastFrameHeight)
+        cachedPvScale = pvScale
+        val ox = (viewWidth - lastFrameWidth * pvScale) / 2f
+        val oy = (viewHeight - lastFrameHeight * pvScale) / 2f
+        cachedF2S = floatArrayOf(
+            pvScale, 0f, ox,
+            0f, pvScale, oy,
+            0f, 0f, 1f
+        )
     }
 
     private fun updateOverlayFromCombined() {
-        val scale = previewScale()
+        val pvScale = cachedPvScale
+        val cx = viewWidth / 2f
+        val cy = viewHeight / 2f
+
+        val corners = previousTransform.paperCornersFrame
+        val renderMatrix: FloatArray
+
+        if (corners != null && corners.size == 4) {
+            // Paper-mapping branch: map overlay view rect onto the paper quadrilateral.
+            // Convert frame-space paper corners to screen space via F2S.
+            val screenCorners = corners.map { (fx, fy) ->
+                Pair(
+                    cachedF2S[0] * fx + cachedF2S[1] * fy + cachedF2S[2],
+                    cachedF2S[3] * fx + cachedF2S[4] * fy + cachedF2S[5]
+                )
+            }
+
+            // Source rect: centered in view, matching paper aspect ratio (cached from reference)
+            val paperAR = previousTransform.paperAspectRatio
+            val srcW: Float
+            val srcH: Float
+            if (paperAR <= 0f) {
+                srcW = viewWidth; srcH = viewHeight
+            } else {
+                val viewAR = viewWidth / viewHeight
+                if (paperAR > viewAR) {
+                    srcW = viewWidth; srcH = viewWidth / paperAR
+                } else {
+                    srcH = viewHeight; srcW = viewHeight * paperAR
+                }
+            }
+            val srcX = (viewWidth - srcW) / 2f
+            val srcY = (viewHeight - srcH) / 2f
+
+            val viewCorners = listOf(
+                Pair(srcX, srcY),
+                Pair(srcX + srcW, srcY),
+                Pair(srcX + srcW, srcY + srcH),
+                Pair(srcX, srcY + srcH)
+            )
+            val h = HomographySolver.solveHomography(viewCorners, screenCorners)
+
+            if (h != null) {
+                // Manual rotation/scale in VIEW space (before H) so the image
+                // rotates/scales "within" the paper, not the warped result.
+                val vcx = viewWidth / 2f
+                val vcy = viewHeight / 2f
+                val mView = MatrixUtils.compose(
+                    MatrixUtils.translate(vcx, vcy),
+                    MatrixUtils.rotate(manualRotation),
+                    MatrixUtils.scale(manualScaleFactor),
+                    MatrixUtils.translate(-vcx, -vcy)
+                )
+                // Offset in screen space (after H) so drag feels natural
+                val mOffset = MatrixUtils.translate(manualOffset.x, manualOffset.y)
+                renderMatrix = MatrixUtils.compose(mOffset, h, mView)
+            } else {
+                renderMatrix = computeAffineMatrix(pvScale, cx, cy)
+            }
+        } else {
+            // Affine branch (2 markers or fewer)
+            renderMatrix = computeAffineMatrix(pvScale, cx, cy)
+        }
+
+        _renderMatrix.value = renderMatrix
+
         _uiState.update {
             it.copy(
                 overlayOffset = Offset(
-                    previousTransform.offsetX * scale + manualOffset.x,
-                    previousTransform.offsetY * scale + manualOffset.y
+                    previousTransform.offsetX * pvScale + manualOffset.x,
+                    previousTransform.offsetY * pvScale + manualOffset.y
                 ),
                 overlayScale = previousTransform.scale * manualScaleFactor,
                 overlayRotation = previousTransform.rotation + manualRotation
             )
         }
     }
+
+    private fun computeAffineMatrix(pvScale: Float, cx: Float, cy: Float): FloatArray {
+        val tx = previousTransform.offsetX * pvScale + manualOffset.x
+        val ty = previousTransform.offsetY * pvScale + manualOffset.y
+        val s = previousTransform.scale * manualScaleFactor
+        val r = previousTransform.rotation + manualRotation
+        return MatrixUtils.compose(
+            MatrixUtils.translate(tx, ty),
+            MatrixUtils.translate(cx, cy),
+            MatrixUtils.rotate(r),
+            MatrixUtils.scale(s),
+            MatrixUtils.translate(-cx, -cy)
+        )
+    }
+
 }
