@@ -27,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
@@ -124,8 +123,8 @@ private fun MarkerGuideContent() {
         )
         StepCard(
             step = "2",
-            title = "Place at opposite corners",
-            instructions = "Cut out markers #0 and #1. Tape them at two opposite corners of your drawing area (e.g. top-left and bottom-right), just outside the zone you want to trace."
+            title = "Place at top corners",
+            instructions = "Cut out markers #0 and #1. Tape them at the top-left and top-right corners of your drawing area, just outside the zone you want to trace. This keeps them visible while you draw."
         )
         StepCard(
             step = "3",
@@ -229,28 +228,24 @@ private fun StandOptionCard(
 
 @Composable
 private fun ExternalLinksSection() {
-    val uriHandler = LocalUriHandler.current
-
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = "Downloads",
             style = MaterialTheme.typography.titleMedium
         )
         OutlinedButton(
-            onClick = {
-                uriHandler.openUri("https://github.com/jn0v/traceglass/releases/latest/download/markers.pdf")
-            },
+            onClick = { },
+            enabled = false,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Download printable marker sheet (opens browser)")
+            Text("Printable marker sheet \u2014 coming soon")
         }
         OutlinedButton(
-            onClick = {
-                uriHandler.openUri("https://github.com/jn0v/traceglass/releases/latest/download/phone-stand.stl")
-            },
+            onClick = { },
+            enabled = false,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Download 3D phone stand model (opens browser)")
+            Text("3D phone stand model \u2014 coming soon")
         }
     }
 }
