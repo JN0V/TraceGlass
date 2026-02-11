@@ -14,15 +14,17 @@ class OpenCvMarkerDetector : MarkerDetector {
         frameBuffer: ByteBuffer,
         width: Int,
         height: Int,
+        rowStride: Int,
         rotation: Int
     ): MarkerResult {
-        return nativeDetect(frameBuffer, width, height, rotation)
+        return nativeDetect(frameBuffer, width, height, rowStride, rotation)
     }
 
     private external fun nativeDetect(
         byteBuffer: ByteBuffer,
         width: Int,
         height: Int,
+        rowStride: Int,
         rotation: Int
     ): MarkerResult
 }

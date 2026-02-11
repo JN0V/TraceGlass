@@ -18,6 +18,7 @@ Java_io_github_jn0v_traceglass_core_cv_OpenCvMarkerDetector_nativeDetect(
     jobject byteBuffer,
     jint width,
     jint height,
+    jint rowStride,
     jint rotation
 ) {
     auto startTime = std::chrono::steady_clock::now();
@@ -36,7 +37,14 @@ Java_io_github_jn0v_traceglass_core_cv_OpenCvMarkerDetector_nativeDetect(
     }
 
     // Create grayscale Mat from YUV (first plane is Y = grayscale)
-    cv::Mat gray(height, width, CV_8UC1, bufferAddr);
+    // Use rowStride as step to handle padding between rows
+    cv::Mat grayPadded(height, width, CV_8UC1, bufferAddr, (size_t)rowStride);
+    cv::Mat gray;
+    if (rowStride == width) {
+        gray = grayPadded;
+    } else {
+        grayPadded.copyTo(gray);
+    }
 
     // Apply rotation if needed
     if (rotation == 90) {

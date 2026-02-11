@@ -11,6 +11,7 @@ class FakeMarkerDetector : MarkerDetector {
         frameBuffer: ByteBuffer,
         width: Int,
         height: Int,
+        rowStride: Int,
         rotation: Int
     ): MarkerResult {
         detectCallCount++
