@@ -23,17 +23,17 @@ import kotlin.math.sqrt
 class OverlayTransformCalculator(
     private val smoothingFactor: Float = 0.12f
 ) {
-    companion object {
-        val A4_PAPER_CORNERS_MM = listOf(
-            Pair(0f, 0f), Pair(210f, 0f), Pair(210f, 297f), Pair(0f, 297f)
-        )
-    }
-
     // Reference geometry: set on first 4-marker detection
     private var referenceCorners: Map<Int, Pair<Float, Float>>? = null
     private var smoothedCorners: MutableMap<Int, Pair<Float, Float>>? = null
     private var referencePaperAR: Float = 0f
     private var calibratedFocalLength: Float? = null
+    // Rectangular paper coords for constrained homography (paper-size agnostic)
+    private var calibratedPaperCorners: List<Pair<Float, Float>>? = null
+    private var needsRebuildPaperCoords: Boolean = false
+    // True when reference was near fronto-parallel (paper coords approximate a rectangle).
+    // Auto-f-estimation only works when this is true.
+    private var isReferenceRectangular: Boolean = false
 
     // Previous frame's smooth values for delta-based estimation
     private var prevSmooth: Map<Int, Pair<Float, Float>>? = null
@@ -88,22 +88,42 @@ class OverlayTransformCalculator(
             referenceCorners = detected.toMap()
             smoothedCorners = detected.toMutableMap()
 
-            // Estimate focal length from 4-marker calibration
-            val detectedList = (0..3).mapNotNull { detected[it] }
-            if (detectedList.size == 4) {
-                calibratedFocalLength = HomographySolver.estimateFocalLength(
-                    A4_PAPER_CORNERS_MM,
-                    detectedList,
-                    frameWidth / 2f, frameHeight / 2f
-                )
-            }
-
-            // Compute paper AR from reference (fixed, never recomputed)
             val tl = detected[0]!!; val tr = detected[1]!!
             val br = detected[2]!!; val bl = detected[3]!!
+            calibratedPaperCorners = listOf(tl, tr, br, bl)
+            calibratedFocalLength = null
+
             val w = (dist(tl, tr) + dist(bl, br)) / 2f
             val h = (dist(tl, bl) + dist(tr, br)) / 2f
             referencePaperAR = if (h > 0.001f) w / h else 1f
+
+            // Check if reference is near fronto-parallel (top/bottom and left/right
+            // edges approximately equal). Auto-f-estimation only works in this case
+            // because the paper coords approximate a real physical rectangle.
+            val topEdge = dist(tl, tr); val bottomEdge = dist(bl, br)
+            val leftEdge = dist(tl, bl); val rightEdge = dist(tr, br)
+            val hRatio = if (bottomEdge > 0.1f) topEdge / bottomEdge else 1f
+            val vRatio = if (rightEdge > 0.1f) leftEdge / rightEdge else 1f
+            // Threshold 0.08 allows up to ~5° tilt. Beyond that, the paper coords
+            // are too distorted for reliable focal length auto-estimation.
+            isReferenceRectangular = kotlin.math.abs(hRatio - 1f) < 0.08f &&
+                                    kotlin.math.abs(vRatio - 1f) < 0.08f
+        }
+
+        // Auto-estimate focal length when reference is rectangular and all 4 visible
+        if (calibratedFocalLength == null && isReferenceRectangular && cornerIds.size == 4) {
+            val paper = calibratedPaperCorners
+            val allDetected = (0..3).mapNotNull { detected[it] }
+            if (paper != null && allDetected.size == 4) {
+                calibratedFocalLength = HomographySolver.estimateFocalLength(
+                    paper, allDetected, frameWidth / 2f, frameHeight / 2f
+                )
+            }
+        }
+
+        // Rebuild paper coords as proper rectangle when f becomes available
+        if (needsRebuildPaperCoords) {
+            rebuildPaperCoords(frameWidth, frameHeight)
         }
 
         val smooth = smoothedCorners!!
@@ -222,9 +242,8 @@ class OverlayTransformCalculator(
     }
 
     /**
-     * Estimate missing corners using known A4 paper geometry + calibrated focal length.
-     * Solves a constrained homography from 3 visible paper→frame correspondences,
-     * then projects the missing corners through H.
+     * Estimate missing corners using calibrated rectangle geometry + focal length.
+     * Works with any paper size — the rectangle is computed from the initial 4-marker detection.
      *
      * @return true if estimation succeeded, false to fall back to affine delta
      */
@@ -237,9 +256,10 @@ class OverlayTransformCalculator(
         frameHeight: Float
     ): Boolean {
         if (visibleIds.size < 3) return false
+        val paper = calibratedPaperCorners ?: return false
 
         val ids = visibleIds.take(3)
-        val paperCoords3 = ids.map { A4_PAPER_CORNERS_MM[it] }
+        val paperCoords3 = ids.map { paper[it] }
         val frameCoords3 = ids.map { smooth[it] ?: return false }
 
         val H = HomographySolver.solveConstrainedHomography(
@@ -247,7 +267,7 @@ class OverlayTransformCalculator(
         ) ?: return false
 
         for (id in missingIds) {
-            val (px, py) = A4_PAPER_CORNERS_MM[id]
+            val (px, py) = paper[id]
             val w = H[6] * px + H[7] * py + H[8]
             if (kotlin.math.abs(w) < 1e-6f) return false
             smooth[id] = Pair(
@@ -380,6 +400,62 @@ class OverlayTransformCalculator(
         )
     }
 
+    /**
+     * Rebuild paper coords as a proper rectangle using the known focal length.
+     * The initial detected positions are perspectively distorted; using them as-is
+     * violates the planar assumption in solveConstrainedHomography.
+     * With known f, we can correct the aspect ratio to recover the true rectangle.
+     */
+    private fun rebuildPaperCoords(frameWidth: Float, frameHeight: Float) {
+        needsRebuildPaperCoords = false
+        val f = calibratedFocalLength ?: return
+        val ref = referenceCorners ?: return
+        val corners = (0..3).mapNotNull { ref[it] }
+        if (corners.size != 4) return
+
+        val tl = corners[0]; val tr = corners[1]
+        val br = corners[2]; val bl = corners[3]
+
+        // Edge-length rectangle matching detected shape
+        val w = (dist(tl, tr) + dist(bl, br)) / 2f
+        val h = (dist(tl, bl) + dist(tr, br)) / 2f
+        if (w < 1f || h < 1f) return
+
+        val centX = (tl.first + tr.first + br.first + bl.first) / 4f
+        val centY = (tl.second + tr.second + br.second + bl.second) / 4f
+
+        val edgeRect = listOf(
+            Pair(centX - w / 2, centY - h / 2), Pair(centX + w / 2, centY - h / 2),
+            Pair(centX + w / 2, centY + h / 2), Pair(centX - w / 2, centY + h / 2)
+        )
+
+        // Correct AR using known f (norm ratio of K⁻¹·H columns)
+        val correctedAR = HomographySolver.correctAspectRatio(
+            edgeRect, listOf(tl, tr, br, bl), f, frameWidth / 2f, frameHeight / 2f
+        )
+
+        if (correctedAR != null && correctedAR > 0.1f && correctedAR < 10f) {
+            val correctedH = w / correctedAR
+            calibratedPaperCorners = listOf(
+                Pair(centX - w / 2, centY - correctedH / 2),
+                Pair(centX + w / 2, centY - correctedH / 2),
+                Pair(centX + w / 2, centY + correctedH / 2),
+                Pair(centX - w / 2, centY + correctedH / 2)
+            )
+            referencePaperAR = correctedAR
+        }
+    }
+
+    /**
+     * Provide the camera focal length in pixels (from CameraX intrinsics).
+     * Enables perspective-correct 4th corner estimation when 3 markers are visible.
+     * Without this, falls back to affine delta which accumulates error under tilt.
+     */
+    fun setFocalLength(f: Float) {
+        calibratedFocalLength = f
+        needsRebuildPaperCoords = true
+    }
+
     fun resetReference() {
         referenceSpacing = null
         referenceAngle = null
@@ -390,6 +466,9 @@ class OverlayTransformCalculator(
         smoothedCorners = null
         referencePaperAR = 0f
         calibratedFocalLength = null
+        calibratedPaperCorners = null
+        needsRebuildPaperCoords = false
+        isReferenceRectangular = false
         prevSmooth = null
         lastTransform = OverlayTransform.IDENTITY
     }
