@@ -337,6 +337,60 @@ object HomographySolver {
     }
 
     /**
+     * Correct the aspect ratio of an assumed rectangle by analyzing perspective distortion.
+     *
+     * Given H mapping assumedPaperCoords → detectedCorners, the true AR is:
+     *   AR_true = AR_assumed * |K⁻¹·h₁| / |K⁻¹·h₂|
+     * where h₁, h₂ are H's columns (representing the x and y basis in the image).
+     *
+     * The orthogonality constraint (used to estimate f) is invariant to paper scale,
+     * so f estimated from the wrong AR is still valid for this correction.
+     *
+     * @param assumedPaperCoords 4 assumed rectangle corners (same scale as detected)
+     * @param detectedCorners 4 detected positions in pixels
+     * @param f focal length in pixels
+     * @param cx principal point x
+     * @param cy principal point y
+     * @return corrected aspect ratio (width/height), or null if degenerate
+     */
+    fun correctAspectRatio(
+        assumedPaperCoords: List<Pair<Float, Float>>,
+        detectedCorners: List<Pair<Float, Float>>,
+        f: Float,
+        cx: Float,
+        cy: Float
+    ): Float? {
+        if (assumedPaperCoords.size != 4 || detectedCorners.size != 4) return null
+        val H = solveHomography(assumedPaperCoords, detectedCorners) ?: return null
+        val fd = f.toDouble()
+        val cxd = cx.toDouble()
+        val cyd = cy.toDouble()
+        val h = DoubleArray(9) { H[it].toDouble() }
+
+        // v1 = K⁻¹ * col1, v2 = K⁻¹ * col2
+        val v1x = (h[0] - cxd * h[6]) / fd
+        val v1y = (h[3] - cyd * h[6]) / fd
+        val v1z = h[6]
+        val v2x = (h[1] - cxd * h[7]) / fd
+        val v2y = (h[4] - cyd * h[7]) / fd
+        val v2z = h[7]
+
+        val norm1 = sqrt(v1x * v1x + v1y * v1y + v1z * v1z)
+        val norm2 = sqrt(v2x * v2x + v2y * v2y + v2z * v2z)
+        if (norm1 < 1e-10 || norm2 < 1e-10) return null
+
+        // AR_true = AR_assumed * norm1/norm2
+        val assumedW = assumedPaperCoords[1].first - assumedPaperCoords[0].first
+        val assumedH = assumedPaperCoords[3].second - assumedPaperCoords[0].second
+        if (assumedH < 0.001f || assumedW < 0.001f) return null
+        val assumedAR = assumedW / assumedH
+
+        val corrected = (assumedAR * norm1 / norm2).toFloat()
+        if (corrected < 0.1f || corrected > 10f) return null
+        return corrected
+    }
+
+    /**
      * General NxN Gaussian elimination with partial pivoting.
      */
     internal fun gaussianEliminationN(A: Array<DoubleArray>, b: DoubleArray, n: Int): DoubleArray? {
