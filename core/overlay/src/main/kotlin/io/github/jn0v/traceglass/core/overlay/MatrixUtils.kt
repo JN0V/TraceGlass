@@ -61,11 +61,4 @@ object MatrixUtils {
     fun compose(vararg matrices: FloatArray): FloatArray {
         return matrices.reduce { acc, m -> multiply(acc, m) }
     }
-
-    /**
-     * Lerp each element of two 3x3 matrices.
-     */
-    fun lerp(a: FloatArray, b: FloatArray, t: Float): FloatArray {
-        return FloatArray(9) { i -> a[i] + (b[i] - a[i]) * t }
-    }
 }

@@ -489,18 +489,42 @@ class OverlayTransformCalculatorTest {
         }
 
         /**
-         * Calibrates with a tilted view so focal length can be estimated.
-         * This enables the perspective-correct 4th corner estimation path.
+         * Calibrates in two phases:
+         * 1. Fronto-parallel 4 markers → correct rectangle geometry
+         * 2. Tilted 4 markers → focal length estimation
+         * This matches real usage: phone starts roughly overhead, then tilts.
          */
         private fun initCalibratedCalculator(
             corners: List<Pair<Float, Float>>,
             calibrationTiltDeg: Float = 10f
         ): OverlayTransformCalculator {
             val calc = OverlayTransformCalculator(smoothingFactor = 1f)
-            val calibCorners = perspectiveTilt(corners, calibrationTiltDeg)
-            val mr = MarkerResult(markersForCorners(calibCorners), 0L, frameW.toInt(), frameH.toInt())
-            calc.compute(mr, frameW, frameH) // frame 1: set reference + estimate focal length
-            calc.compute(mr, frameW, frameH) // frame 2: set prevSmooth
+            // Frame 1: fronto-parallel → sets reference + correct rectangle, f=null
+            val flat = MarkerResult(markersForCorners(corners), 0L, frameW.toInt(), frameH.toInt())
+            calc.compute(flat, frameW, frameH)
+            // Frame 2: tilted with all 4 → re-estimates focal length
+            val tilted = perspectiveTilt(corners, calibrationTiltDeg)
+            val tiltedMr = MarkerResult(markersForCorners(tilted), 0L, frameW.toInt(), frameH.toInt())
+            calc.compute(tiltedMr, frameW, frameH)
+            // Frame 3: same tilted → sets prevSmooth
+            calc.compute(tiltedMr, frameW, frameH)
+            return calc
+        }
+
+        /**
+         * Realistic scenario: first detection is TILTED (no fronto-parallel warmup).
+         * This is what happens on a real device — the phone is already at an angle
+         * when markers are first detected.
+         */
+        private fun initTiltedCalculator(
+            corners: List<Pair<Float, Float>>,
+            tiltDeg: Float = 15f
+        ): OverlayTransformCalculator {
+            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
+            val tilted = perspectiveTilt(corners, tiltDeg)
+            val mr = MarkerResult(markersForCorners(tilted), 0L, frameW.toInt(), frameH.toInt())
+            calc.compute(mr, frameW, frameH) // frame 1: tilted → sets reference
+            calc.compute(mr, frameW, frameH) // frame 2: same → prevSmooth
             return calc
         }
 
@@ -620,6 +644,78 @@ class OverlayTransformCalculatorTest {
                 "Gradual 20° tilt: error=${f(gradualError)}px")
             assertTrue(singleError < 5f,
                 "Single 20° tilt: error=${f(singleError)}px")
+        }
+
+        @Test
+        fun `3 markers - tilted first detection then hide marker`() {
+            // REALISTIC: phone is already tilted when first seeing all 4 markers.
+            // No fronto-parallel warmup. This is the real device scenario.
+            val corners = a4Corners()
+            for (tiltDeg in listOf(10f, 15f, 20f)) {
+                val calc = initTiltedCalculator(corners, tiltDeg)
+                val tilted = perspectiveTilt(corners, tiltDeg)
+                for (hiddenId in 0..3) {
+                    val visible = markersForCorners(tilted).filter { it.id != hiddenId }
+                    val result = calc.compute(
+                        MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                    )
+                    val err = errorPx(tilted[hiddenId], result.paperCornersFrame!![hiddenId])
+                    assertTrue(err < 10f,
+                        "Tilted init ${tiltDeg}°, hidden=$hiddenId: error=${f(err)}px (should be <10)")
+                }
+            }
+        }
+
+        @Test
+        fun `3 markers - tilted first detection then gradual tilt without f`() {
+            // Without focal length: affine delta accumulates perspective error.
+            // At 30fps with ~10°/s tilt, each frame changes by ~0.3°.
+            // Using 0.1° steps simulates realistic frame rate. The last frame's
+            // delta is only 0.1°, so affine error is negligible.
+            // Fresh calculator per hiddenId — hiding a corner mutates state.
+            val corners = a4Corners()
+            val tilted20 = perspectiveTilt(corners, 20f)
+
+            for (hiddenId in 0..3) {
+                val calc = initTiltedCalculator(corners, 10f)
+                // Gradual tilt from 10.1° to 19.9° in 0.1° steps, all 4 visible
+                var deg = 10.1f
+                while (deg < 20f) {
+                    calc.compute(
+                        MarkerResult(markersForCorners(perspectiveTilt(corners, deg)), 0L, frameW.toInt(), frameH.toInt()),
+                        frameW, frameH
+                    )
+                    deg += 0.1f
+                }
+
+                val visible = markersForCorners(tilted20).filter { it.id != hiddenId }
+                val result = calc.compute(
+                    MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                )
+                val err = errorPx(tilted20[hiddenId], result.paperCornersFrame!![hiddenId])
+                assertTrue(err < 5f,
+                    "Gradual 10°→20° no f, hidden=$hiddenId: error=${f(err)}px (should be <5)")
+            }
+        }
+
+        @Test
+        fun `3 markers - tilted first detection with setFocalLength`() {
+            // With focal length provided (from CameraX), perspective correction works
+            // even when init was tilted. Error drops from ~23px to <5px.
+            val corners = a4Corners()
+            val calc = initTiltedCalculator(corners, 10f)
+            calc.setFocalLength(800f)
+
+            val tilted20 = perspectiveTilt(corners, 20f)
+            for (hiddenId in 0..3) {
+                val visible = markersForCorners(tilted20).filter { it.id != hiddenId }
+                val result = calc.compute(
+                    MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+                )
+                val err = errorPx(tilted20[hiddenId], result.paperCornersFrame!![hiddenId])
+                assertTrue(err < 5f,
+                    "Tilted init + setFocalLength, hidden=$hiddenId: error=${f(err)}px (should be <5)")
+            }
         }
 
         @Test
