@@ -1,0 +1,108 @@
+# generated: 2026-02-14
+# project: test-bmad
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: /home/seb/CascadeProjects/TraceGlass/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-02-14
+project: test-bmad
+project_key: NOKEY
+tracking_system: file-system
+story_location: /home/seb/CascadeProjects/TraceGlass/_bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Project Foundation & Camera Feed
+  epic-1: done
+  1-1-project-scaffolding-multi-module-structure: done
+  1-2-f-droid-reproducibility-configuration: done
+  1-3-github-actions-ci-pipeline: done
+  1-4-live-camera-feed: done
+  1-5-flashlight-toggle: done
+  epic-1-retrospective: optional
+
+  # Epic 2: Core Tracing Experience
+  epic-2: in-progress
+  2-1-image-import-via-photo-picker: done
+  2-2-overlay-rendering-on-camera-feed: done
+  2-3-opacity-control: done
+  2-4-overlay-visual-modes: done
+  2-5-overlay-positioning: done
+  2-6-tracing-session-control-visibility: in-progress # WIP: ExpandableMenu FAB + 5s auto-collapse manquants
+  2-7-overlay-lock-viewport-zoom: backlog # Lock/unlock + viewport zoom pas commencé
+  epic-2-retrospective: optional
+
+  # Epic 3: Marker Tracking
+  epic-3: done
+  3-1-opencv-jni-integration-basic-marker-detection: done
+  3-2-marker-based-overlay-stabilization: done
+  3-3-tracking-resilience-fallback: done
+  3-4-tracking-status-indicator-audio-feedback: done
+  epic-3-retrospective: optional
+
+  # Epic 4: Time-lapse Capture & Sharing
+  # NOTE: All 4 stories have isolated implementations + unit tests,
+  # but NONE are wired into the app (no DI, no ViewModel integration, no UI).
+  # Missing: Koin timelapseModule, TracingViewModel integration, FrameAnalyzer JPEG capture, UI controls.
+  epic-4: in-progress
+  4-1-automatic-snapshot-capture: in-progress # WIP: TimelapseSession + FileSnapshotStorage exist but not wired — no frame capture, no DI, no UI
+  4-2-mp4-video-compilation: in-progress # WIP: MediaCodecCompiler exists but never called — no trigger on session stop
+  4-3-timelapse-export-sharing: in-progress # WIP: MediaStoreVideoExporter + VideoSharer exist but never called — no export/share UI
+  4-4-timelapse-snapshot-preservation: in-progress # WIP: FileSnapshotStorage persists to disk but never called — no lifecycle hooks
+  epic-4-retrospective: optional
+
+  # Epic 5: Session Persistence
+  # FIXED: sessionRepository = get() added to TracingModule.kt (was missing, causing silent no-op)
+  epic-5: done
+  5-1-session-auto-save-on-background: done
+  5-2-session-auto-restore-on-foreground: done
+  5-3-explicit-session-pause-resume: done
+  epic-5-retrospective: optional
+
+  # Epic 6: Onboarding & Setup Guides
+  epic-6: in-progress
+  6-1-onboarding-carousel: done
+  6-2-interactive-camera-walkthrough: in-progress # WIP: WalkthroughViewModel exists but NO WalkthroughScreen composable, no NavHost route, not in DI
+  6-3-setup-guides-external-links: in-progress # WIP: screen accessible but external link buttons disabled (enabled=false, onClick={})
+  6-4-onboarding-flow-control: done
+  epic-6-retrospective: optional
+
+  # Epic 7: Settings & Comfort Features
+  epic-7: done
+  7-1-settings-screen: done
+  7-2-break-reminders: done
+  7-3-app-icon-about-screen: done
+  epic-7-retrospective: optional
+
+  # Epic 8: Advanced Tracking & Perspective
+  epic-8: in-progress
+  8-1-perspective-correction-via-4-marker-homography: in-progress # WIP: intégration CameraX intrinsics → setFocalLength() manquante
+  epic-8-retrospective: optional
