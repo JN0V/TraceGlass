@@ -38,6 +38,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
@@ -219,6 +220,19 @@ private fun CameraPreviewContent(
             snackbarHostState.showSnackbar("Time for a break!")
             onBreakReminderDismissed()
         }
+    }
+
+    val prevTrackingState = remember { mutableStateOf(TrackingState.INACTIVE) }
+    LaunchedEffect(trackingState) {
+        if (audioFeedbackEnabled) {
+            when {
+                prevTrackingState.value == TrackingState.TRACKING && trackingState == TrackingState.LOST ->
+                    AudioFeedbackPlayer(context).playTrackingLostTone()
+                prevTrackingState.value == TrackingState.LOST && trackingState == TrackingState.TRACKING ->
+                    AudioFeedbackPlayer(context).playTrackingGainedTone()
+            }
+        }
+        prevTrackingState.value = trackingState
     }
 
     DisposableEffect(overlayImageUri) {
