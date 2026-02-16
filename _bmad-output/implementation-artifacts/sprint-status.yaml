@@ -33,7 +33,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-02-14
+generated: 2026-02-16
 project: test-bmad
 project_key: NOKEY
 tracking_system: file-system
@@ -65,7 +65,7 @@ development_status:
   3-1-opencv-jni-integration-basic-marker-detection: done
   3-2-marker-based-overlay-stabilization: done
   3-3-tracking-resilience-fallback: done
-  3-4-tracking-status-indicator-audio-feedback: done
+  3-4-tracking-status-indicator-audio-feedback: done # FIXED (feb-16): DTMF tones on STREAM_MUSIC with delayed release
   epic-3-retrospective: optional
 
   # Epic 4: Time-lapse Capture & Sharing
@@ -80,10 +80,12 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: Session Persistence
-  # FIXED: sessionRepository = get() added to TracingModule.kt (was missing, causing silent no-op)
+  # FIXED (feb-14): sessionRepository = get() added to TracingModule.kt (was missing, causing silent no-op)
+  # FIXED (feb-16): robust save (eager+debounce+NonCancellable), resume dialog on cold start,
+  #   image copied to internal storage, rotation persisted, race condition save/restore fixed
   epic-5: done
-  5-1-session-auto-save-on-background: done
-  5-2-session-auto-restore-on-foreground: done
+  5-1-session-auto-save-on-background: done # Eager save on state change + debounce 500ms + NonCancellable DataStore write
+  5-2-session-auto-restore-on-foreground: done # Resume dialog on cold start, auto-restore image from internal copy, all fields (incl. rotation)
   5-3-explicit-session-pause-resume: done
   epic-5-retrospective: optional
 
