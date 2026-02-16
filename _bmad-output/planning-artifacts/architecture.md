@@ -17,7 +17,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 ### Requirements Overview
 
 **Functional Requirements:**
-36 FRs across 9 capability areas: Image Overlay & Display (7), Marker Tracking & Adaptive Behavior (6), Overlay Positioning (2), Time-lapse (4), User Onboarding (4), Setup Assistance (4), Session Persistence (5), User Controls & Settings (4).
+45 FRs across 10 capability areas: Image Overlay & Display (7), Marker Tracking & Adaptive Behavior (6), Overlay Positioning & Lock (7), Time-lapse (4), User Onboarding (4), Setup Assistance (4), Session Persistence (5), User Controls & Settings (4), Audio Feedback (2), Comfort (2).
 
 Core architectural challenge: real-time camera pipeline with computer vision (OpenCV) overlay rendering at ≥ 20fps with < 50ms marker detection latency.
 
@@ -307,6 +307,33 @@ MarkerResult + OverlayImage → OverlayTransform → Compose Canvas (render)
 - ImageAnalysis runs on its own executor (background thread)
 - Results posted to StateFlow, consumed by Compose on Main thread
 - No frame copying — ImageProxy buffer passed directly to JNI (KISS, performance)
+
+### Decision 9: Overlay Transform Architecture (3-Transform Model)
+
+**Decision:** Three independent transforms compose to produce the final overlay rendering.
+
+**Transforms:**
+```
+T_final = T_viewport × T_paper × T_image
+
+T_image:    Image-on-paper positioning (drag, pinch, rotate) — FROZEN after lock
+T_paper:    Paper-on-screen (marker-driven tracking transform) — ALWAYS active
+T_viewport: Viewport zoom/pan (digital crop) — ONLY active after lock
+```
+
+**Rationale:**
+- Separating image positioning from marker tracking eliminates the drag/marker conflict (SOLID-S)
+- Lock freezes `T_image` while `T_paper` continues updating from marker detection
+- After lock, gestures control `T_viewport` (digital crop on combined view) (KISS)
+- Opacity and visual modes are independent of all three transforms (SOLID-S)
+
+**Lock Workflow:**
+1. **Before lock:** User gestures modify `T_image`. `T_paper` tracks markers. `T_viewport` = identity.
+2. **Lock action:** `T_image` frozen. Gesture target switches to `T_viewport`.
+3. **After lock:** `T_paper` continues tracking. `T_viewport` allows zoom/pan on combined view.
+4. **Unlock (with confirmation):** `T_viewport` resets to identity. Gesture target switches back to `T_image`.
+
+**State persistence:** All three transforms + lock state saved/restored via `:core:session` (SOLID-D).
 
 ### Decision Impact Analysis
 
@@ -683,13 +710,15 @@ TraceGlass/
 
 **Data Flow:**
 ```
-Camera Frame → FrameProvider → MarkerDetector → MarkerResult
-                                                     ↓
-User Image → OverlayConfig → OverlayRenderer ← OverlayTransform
-                                    ↓
-                              Compose Canvas (display)
-                                    ↓
-                          SnapshotCapturer → JPEG files → Mp4Compiler → MediaStore
+Camera Frame → FrameProvider → MarkerDetector → MarkerResult → T_paper (tracking)
+                                                                    ↓
+User Image → T_image (positioning, frozen at lock) ──────→ T_final = T_viewport × T_paper × T_image
+                                                                    ↑
+User Gestures (after lock) ─────────────────────────→ T_viewport (zoom/pan)
+                                                                    ↓
+                                                        OverlayRenderer → Compose Canvas (display)
+                                                                              ↓
+                                                                  SnapshotCapturer → JPEG → Mp4Compiler → MediaStore
 ```
 
 ### Requirements to Module Mapping
@@ -698,12 +727,12 @@ User Image → OverlayConfig → OverlayRenderer ← OverlayTransform
 |-------------|--------|-----|
 | Image Overlay & Display | `:core:overlay`, `:feature:tracing` | FR1-FR7 |
 | Marker Tracking | `:core:cv`, `:core:camera` | FR8-FR13 |
-| Overlay Positioning | `:core:overlay`, `:feature:tracing` | FR14-FR15 |
+| Overlay Positioning & Lock | `:core:overlay`, `:feature:tracing` | FR14-FR15, FR41-FR45 |
 | Time-lapse | `:feature:timelapse` | FR16-FR19 |
 | Onboarding | `:feature:onboarding` | FR20-FR23 |
 | Setup Assistance | `:feature:onboarding` | FR24-FR27 |
 | Session Persistence | `:core:session`, `:feature:tracing` | FR28-FR32 |
-| Controls & Settings | `:feature:tracing`, `:app` | FR33-FR36 |
+| Controls, Settings & Comfort | `:feature:tracing`, `:app` | FR33-FR40 |
 
 ### Development Workflow
 
@@ -736,18 +765,18 @@ User Image → OverlayConfig → OverlayRenderer ← OverlayTransform
 
 ### Requirements Coverage Validation ✅
 
-**Functional Requirements (36 FRs):**
+**Functional Requirements (45 FRs):**
 
 | FR Range | Capability | Module(s) | Covered |
 |----------|-----------|-----------|---------|
 | FR1-FR7 | Image Overlay & Display | `:core:overlay`, `:feature:tracing` | ✅ |
 | FR8-FR13 | Marker Tracking | `:core:cv`, `:core:camera` | ✅ |
-| FR14-FR15 | Overlay Positioning | `:core:overlay`, `:feature:tracing` | ✅ |
+| FR14-FR15, FR41-FR45 | Overlay Positioning & Lock | `:core:overlay`, `:feature:tracing` | ✅ |
 | FR16-FR19 | Time-lapse | `:feature:timelapse` | ✅ |
 | FR20-FR23 | Onboarding | `:feature:onboarding` | ✅ |
 | FR24-FR27 | Setup Assistance | `:feature:onboarding` | ✅ |
 | FR28-FR32 | Session Persistence | `:core:session`, `:feature:tracing` | ✅ |
-| FR33-FR36 | Controls & Settings | `:feature:tracing`, `:app` | ✅ |
+| FR33-FR40 | Controls, Settings & Comfort | `:feature:tracing`, `:app` | ✅ |
 
 **Non-Functional Requirements (25 NFRs):**
 
@@ -759,11 +788,11 @@ User Image → OverlayConfig → OverlayRenderer ← OverlayTransform
 | Accessibility (NFR14-17) | Compose built-in accessibility, Material 3 contrast | ✅ |
 | TDD (NFR18-25) | Interfaces for all core modules, Fakes for testing, injected dispatchers, MockK | ✅ |
 
-**Gaps found:** None. All 36 FRs and 25 NFRs have architectural support.
+**Gaps found:** None. All 45 FRs and 25 NFRs have architectural support.
 
 ### Implementation Readiness Validation ✅
 
-**Decision Completeness:** 8/8 decisions documented with rationale and principle tags.
+**Decision Completeness:** 9/9 decisions documented with rationale and principle tags (including 3-transform model).
 **Structure Completeness:** Full project tree with ~70 files mapped.
 **Pattern Completeness:** 7 pattern categories with code examples and enforcement rules.
 
@@ -786,7 +815,7 @@ User Image → OverlayConfig → OverlayRenderer ← OverlayTransform
 - [x] Cross-cutting concerns mapped
 
 **✅ Architectural Decisions**
-- [x] 8 critical decisions documented with rationale
+- [x] 9 critical decisions documented with rationale (including 3-transform overlay model)
 - [x] Technology stack fully specified
 - [x] Guiding principles (SOLID, YAGNI, KISS) defined and enforced
 - [x] Performance considerations addressed (threading model, buffer management)

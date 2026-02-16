@@ -16,6 +16,8 @@ class FakeSessionRepository : SessionRepository {
     var clearCount: Int = 0
         private set
 
+    fun lastSavedData(): SessionData = _sessionData.value
+
     override suspend fun save(data: SessionData) {
         saveCount++
         _sessionData.value = data

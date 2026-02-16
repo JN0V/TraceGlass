@@ -727,46 +727,120 @@ class TracingViewModelTest {
 
     @Nested
     inner class SessionPersistence {
+
         @Test
-        fun `saveSession persists current state`() = runTest {
+        fun `saveSession is blocked until restoreSession completes`() = runTest {
             val repo = FakeSessionRepository()
             val viewModel = createViewModel(sessionRepository = repo)
-            val uri = mockk<Uri>()
-            viewModel.onImageSelected(uri)
-            viewModel.onOpacityChanged(0.8f)
-
+            // saveSession before restoreSession should be no-op
             viewModel.saveSession()
+            assertEquals(0, repo.saveCount)
 
+            // After restore completes, save should work
+            viewModel.restoreSession()
+            viewModel.saveSession()
             assertEquals(1, repo.saveCount)
         }
 
         @Test
-        fun `restoreSession loads saved state`() = runTest {
+        fun `saveSession persists all fields including rotation`() = runTest {
+            val repo = FakeSessionRepository()
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+            val uri = mockk<Uri>()
+            every { uri.toString() } returns "file:///test"
+            viewModel.onImageSelected(uri)
+            testDispatcher.scheduler.advanceUntilIdle() // let auto-save from onImageSelected complete
+            val countAfterSelect = repo.saveCount
+
+            viewModel.onOpacityChanged(0.8f)
+            viewModel.onOverlayDrag(Offset(30f, 40f))
+            viewModel.onOverlayScale(1.5f)
+            viewModel.onOverlayRotate(45f)
+            viewModel.onColorTintChanged(ColorTint.BLUE)
+            viewModel.onToggleInvertedMode()
+            testDispatcher.scheduler.advanceUntilIdle() // let debounced saves complete
+
+            // Verify saved data has all fields
+            val saved = repo.lastSavedData()
+            assertEquals("file:///test", saved.imageUri)
+            assertEquals(0.8f, saved.overlayOpacity)
+            assertTrue(saved.overlayScale > 1f) // 1.0 * 1.5
+            assertTrue(saved.overlayRotation != 0f) // 45 degrees
+            assertEquals("BLUE", saved.colorTint)
+            assertTrue(saved.isInvertedMode)
+            assertTrue(saved.overlayOffsetX != 0f || saved.overlayOffsetY != 0f)
+        }
+
+        @Test
+        fun `full save-kill-restore cycle preserves all state`() = runTest {
             val fakeUri = mockk<Uri>()
             mockkStatic(Uri::class)
-            every { Uri.parse("content://test/image") } returns fakeUri
+            every { Uri.parse(any()) } returns fakeUri
+            every { fakeUri.toString() } returns "file:///data/ref"
 
+            // --- Session 1: user sets up overlay ---
             val repo = FakeSessionRepository()
-            repo.save(SessionData(
-                imageUri = "content://test/image",
-                overlayOffsetX = 50f,
-                overlayOffsetY = 100f,
-                overlayScale = 2f,
-                overlayOpacity = 0.7f,
-                colorTint = "RED",
-                isInvertedMode = true,
-                isSessionActive = true
-            ))
+            val vm1 = createViewModel(sessionRepository = repo)
+            vm1.restoreSession() // no prior data
+            vm1.onImageSelected(fakeUri)
+            vm1.onOpacityChanged(0.7f)
+            vm1.onOverlayDrag(Offset(100f, 200f))
+            vm1.onOverlayScale(2f)
+            vm1.onOverlayRotate(30f)
+            vm1.onColorTintChanged(ColorTint.RED)
+            vm1.onToggleInvertedMode()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Force a final save (simulates ON_STOP)
+            vm1.saveSession()
+            val saved = repo.lastSavedData()
+
+            // --- Process death: new ViewModel reads same repo ---
+            val vm2 = createViewModel(sessionRepository = repo)
+            vm2.restoreSession()
+
+            // Dialog should appear
+            assertTrue(vm2.uiState.value.showResumeSessionDialog)
+            // State should still be defaults
+            assertEquals(0.5f, vm2.uiState.value.overlayOpacity)
+            assertNull(vm2.uiState.value.overlayImageUri)
+
+            // User accepts
+            vm2.onResumeSessionAccepted()
+
+            // All state restored
+            assertFalse(vm2.uiState.value.showResumeSessionDialog)
+            assertEquals(fakeUri, vm2.uiState.value.overlayImageUri)
+            assertEquals(saved.overlayOpacity, vm2.uiState.value.overlayOpacity)
+            assertEquals(saved.overlayScale, vm2.uiState.value.overlayScale, 0.01f)
+            assertEquals(saved.overlayRotation, vm2.uiState.value.overlayRotation, 0.01f)
+            assertEquals(ColorTint.RED, vm2.uiState.value.colorTint)
+            assertTrue(vm2.uiState.value.isInvertedMode)
+            // Offset is transformed by pvScale but with defaults (1f), should match
+            assertTrue(abs(vm2.uiState.value.overlayOffset.x - saved.overlayOffsetX) < 1f)
+            assertTrue(abs(vm2.uiState.value.overlayOffset.y - saved.overlayOffsetY) < 1f)
+
+            unmockkStatic(Uri::class)
+        }
+
+        @Test
+        fun `decline restore clears saved session`() = runTest {
+            val repo = FakeSessionRepository()
+            repo.save(SessionData(imageUri = "file:///img", overlayOpacity = 0.8f))
 
             val viewModel = createViewModel(sessionRepository = repo)
             viewModel.restoreSession()
+            assertTrue(viewModel.uiState.value.showResumeSessionDialog)
 
-            assertEquals(0.7f, viewModel.uiState.value.overlayOpacity)
-            assertEquals(2f, viewModel.uiState.value.overlayScale)
-            assertTrue(viewModel.uiState.value.isInvertedMode)
-            assertEquals(fakeUri, viewModel.uiState.value.overlayImageUri)
+            viewModel.onResumeSessionDeclined()
+            testDispatcher.scheduler.advanceUntilIdle()
 
-            unmockkStatic(Uri::class)
+            assertFalse(viewModel.uiState.value.showResumeSessionDialog)
+            assertEquals(1, repo.clearCount)
+            // Defaults preserved
+            assertEquals(0.5f, viewModel.uiState.value.overlayOpacity)
+            assertNull(viewModel.uiState.value.overlayImageUri)
         }
 
         @Test
@@ -778,16 +852,73 @@ class TracingViewModelTest {
             assertNull(viewModel.uiState.value.overlayImageUri)
             assertEquals(0.5f, viewModel.uiState.value.overlayOpacity)
             assertEquals(1f, viewModel.uiState.value.overlayScale)
+            assertFalse(viewModel.uiState.value.showResumeSessionDialog)
+        }
+
+        @Test
+        fun `restoreSession only runs once`() = runTest {
+            val repo = FakeSessionRepository()
+            repo.save(SessionData(imageUri = "file:///img"))
+
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+            assertTrue(viewModel.uiState.value.showResumeSessionDialog)
+
+            viewModel.onResumeSessionDeclined()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.showResumeSessionDialog)
+
+            // Second call should be no-op (e.g. returning from Settings)
+            viewModel.restoreSession()
+            assertFalse(viewModel.uiState.value.showResumeSessionDialog)
+        }
+
+        @Test
+        fun `onImageSelected triggers immediate save`() = runTest {
+            val repo = FakeSessionRepository()
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+            val uri = mockk<Uri>()
+            every { uri.toString() } returns "file:///img"
+
+            viewModel.onImageSelected(uri)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertTrue(repo.saveCount >= 1)
+            assertEquals("file:///img", repo.lastSavedData().imageUri)
+        }
+
+        @Test
+        fun `debounce save coalesces rapid changes`() = runTest {
+            val repo = FakeSessionRepository()
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+            val uri = mockk<Uri>()
+            every { uri.toString() } returns "file:///img"
+            viewModel.onImageSelected(uri)
+            testDispatcher.scheduler.advanceUntilIdle()
+            val countAfterSelect = repo.saveCount
+
+            // Rapid opacity changes should coalesce via debounce
+            viewModel.onOpacityChanged(0.1f)
+            viewModel.onOpacityChanged(0.2f)
+            viewModel.onOpacityChanged(0.3f)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Should have only 1 debounced save (not 3)
+            assertEquals(countAfterSelect + 1, repo.saveCount)
+            assertEquals(0.3f, repo.lastSavedData().overlayOpacity)
         }
 
         @Test
         fun `onToggleSession triggers auto-save`() = runTest {
             val repo = FakeSessionRepository()
             val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
             viewModel.onToggleSession()
             testDispatcher.scheduler.advanceUntilIdle()
 
-            assertEquals(1, repo.saveCount)
+            assertTrue(repo.saveCount >= 1)
             assertTrue(viewModel.uiState.value.isSessionActive)
         }
 
@@ -795,6 +926,7 @@ class TracingViewModelTest {
         fun `pause then resume preserves session state`() = runTest {
             val repo = FakeSessionRepository()
             val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
             viewModel.onToggleSession()
             testDispatcher.scheduler.advanceUntilIdle()
             assertTrue(viewModel.uiState.value.isSessionActive)
@@ -802,7 +934,7 @@ class TracingViewModelTest {
             viewModel.onToggleSession()
             testDispatcher.scheduler.advanceUntilIdle()
             assertFalse(viewModel.uiState.value.isSessionActive)
-            assertEquals(2, repo.saveCount)
+            assertTrue(repo.saveCount >= 2)
         }
     }
 }

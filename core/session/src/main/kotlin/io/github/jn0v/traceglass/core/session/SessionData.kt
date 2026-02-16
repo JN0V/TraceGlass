@@ -5,6 +5,7 @@ data class SessionData(
     val overlayOffsetX: Float = 0f,
     val overlayOffsetY: Float = 0f,
     val overlayScale: Float = 1f,
+    val overlayRotation: Float = 0f,
     val overlayOpacity: Float = 0.5f,
     val colorTint: String = "NONE",
     val isInvertedMode: Boolean = false,

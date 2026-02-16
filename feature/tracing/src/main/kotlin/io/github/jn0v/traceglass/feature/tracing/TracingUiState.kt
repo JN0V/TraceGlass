@@ -20,7 +20,8 @@ data class TracingUiState(
     val trackingState: TrackingState = TrackingState.INACTIVE,
     val detectedMarkerCount: Int = 0,
     val showBreakReminder: Boolean = false,
-    val audioFeedbackEnabled: Boolean = false
+    val audioFeedbackEnabled: Boolean = false,
+    val showResumeSessionDialog: Boolean = false
 )
 
 enum class TrackingState {
