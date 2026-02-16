@@ -20,6 +20,7 @@ class DataStoreSessionRepository(
             overlayOffsetX = prefs[KEY_OFFSET_X] ?: 0f,
             overlayOffsetY = prefs[KEY_OFFSET_Y] ?: 0f,
             overlayScale = prefs[KEY_SCALE] ?: 1f,
+            overlayRotation = prefs[KEY_ROTATION] ?: 0f,
             overlayOpacity = prefs[KEY_OPACITY] ?: 0.5f,
             colorTint = prefs[KEY_COLOR_TINT] ?: "NONE",
             isInvertedMode = prefs[KEY_INVERTED] ?: false,
@@ -38,6 +39,7 @@ class DataStoreSessionRepository(
             prefs[KEY_OFFSET_X] = data.overlayOffsetX
             prefs[KEY_OFFSET_Y] = data.overlayOffsetY
             prefs[KEY_SCALE] = data.overlayScale
+            prefs[KEY_ROTATION] = data.overlayRotation
             prefs[KEY_OPACITY] = data.overlayOpacity
             prefs[KEY_COLOR_TINT] = data.colorTint
             prefs[KEY_INVERTED] = data.isInvertedMode
@@ -55,6 +57,7 @@ class DataStoreSessionRepository(
         private val KEY_OFFSET_X = floatPreferencesKey("session_offset_x")
         private val KEY_OFFSET_Y = floatPreferencesKey("session_offset_y")
         private val KEY_SCALE = floatPreferencesKey("session_scale")
+        private val KEY_ROTATION = floatPreferencesKey("session_rotation")
         private val KEY_OPACITY = floatPreferencesKey("session_opacity")
         private val KEY_COLOR_TINT = stringPreferencesKey("session_color_tint")
         private val KEY_INVERTED = booleanPreferencesKey("session_inverted")

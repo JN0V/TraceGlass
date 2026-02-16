@@ -18,16 +18,16 @@ class AudioFeedbackPlayer(private val context: Context) {
     }
 
     fun playTrackingGainedTone() {
-        playTone(ToneGenerator.TONE_PROP_ACK)
+        playTone(ToneGenerator.TONE_DTMF_1, 120)
     }
 
     fun playTrackingLostTone() {
-        playTone(ToneGenerator.TONE_PROP_NACK)
+        playTone(ToneGenerator.TONE_DTMF_0, 200)
     }
 
-    private fun playTone(toneType: Int, durationMs: Int = 150) {
-        val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 50)
+    private fun playTone(toneType: Int, durationMs: Int) {
+        val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
         toneGen.startTone(toneType, durationMs)
-        handler.postDelayed({ toneGen.release() }, durationMs + 50L)
+        handler.postDelayed({ toneGen.release() }, durationMs + 100L)
     }
 }

@@ -72,6 +72,7 @@ The phone is physically stationary — balanced on a stand, box, or improvised s
 |------------|-----------|-----|
 | Marker tracking | Automatic, silent | Detection starts when markers are visible. No user action. |
 | Overlay scaling | Automatic | Computed from marker spacing. No manual resize. |
+| Overlay lock | Deliberate, 1 tap | User positions image, taps Lock. From then on, gestures control viewport, not overlay. |
 | Fallback without markers | Transparent | Overlay switches to fixed mode without dramatic error messages. |
 | Session save | Automatic | Background → save. Foreground → restore. Zero intervention. |
 | Time-lapse capture | Automatic | Periodic snapshots in background. User doesn't think about it while drawing. |
@@ -127,7 +128,7 @@ The phone is physically stationary — balanced on a stand, box, or improvised s
 | Flow (tracing) | Minimal UI during tracing. Hidden controls. Screen = drawing only. |
 | Calm (tracking loss) | Smooth transition to fixed mode. No red alerts. Discreet icon + optional audio. |
 | Pride (result) | Time-lapse highlights the PROCESS, not just the result. The user sees their effort. |
-| Relief (resume) | Instant restoration: overlay + image + exact position. Zero action required. |
+| Relief (resume) | Warm return: same-process → instant restoration. Cold start → friendly "Resume session?" dialog, one tap to restore settings + re-pick image. |
 | Safety (breaks) | Optional reminders that are caring, never guilt-inducing. Gentle tone, not warnings. |
 
 ### Emotional Design Principles
@@ -298,11 +299,17 @@ That's what the user tells a friend. Not "it's an AR app with fiducial marker de
 - If first launch: onboarding
 - If new session: tap "+" → Photo Picker → image selected → overlay appears
 
-**2. Interaction:**
+**2. Positioning (before lock):**
 - Overlay visible on camera feed, semi-transparent
+- User drags, pinches, and rotates to align the overlay with the paper
 - User adjusts opacity if needed (slider in bottom bar)
+
+**3. Lock & Trace:**
+- User taps "Lock" — overlay position/scale/rotation frozen on the paper
 - User places pencil and traces while watching the screen
 - Overlay follows markers in real-time — drawing stays aligned
+- User can pinch to zoom in on details, drag to pan — viewport moves, not the overlay
+- Opacity remains adjustable at all times
 
 **3. Feedback:**
 - Tracking OK → discreet indicator: green checkmark icon (corner of screen)
@@ -402,6 +409,7 @@ Three key design decisions were evaluated through collaborative exploration:
 │    CAMERA FEED      │
 │    + OVERLAY        │
 │                     │
+│         [🔒]        │  ← lock button (unlocked: open padlock, locked: closed + teal)
 │              [◐]    │  ← FAB opacity slider (most used control)
 │ [⋮]                 │  ← expandable menu (image, flash, time-lapse, settings)
 └─────────────────────┘
@@ -475,11 +483,13 @@ flowchart TD
     
     E4 --> F[Photo Picker - Select image]
     F --> G[Overlay appears on feed]
-    G --> H[Tooltip: adjust opacity here]
-    H --> I[User is tracing - Aha moment!]
-    
+    G --> G1[User positions overlay: drag, pinch, rotate]
+    G1 --> G2[Tooltip: adjust opacity here]
+    G2 --> H[User taps Lock]
+    H --> I[Overlay frozen - Aha moment!]
+
     I --> I1[Time-lapse auto-starts]
-    I1 --> I2[User traces for 15-60 min]
+    I1 --> I2[User traces, can zoom/pan viewport for detail]
     I2 --> K{User taps Stop}
     K --> L[Time-lapse preview]
     L --> M{Share?}
@@ -491,6 +501,8 @@ flowchart TD
 **Key decisions:**
 - Camera permission requested AFTER carousel, not before. User understands why first.
 - If markers not detected in 10s → gentle guidance, not an error.
+- Lock step separates "positioning" from "drawing" — prevents accidental overlay moves during tracing.
+- After lock, gestures control viewport (zoom/pan on combined view), not the overlay.
 - Opacity tooltip appears ONCE, then never again.
 
 ### Journey 2: Recurring Use (Léa — Tuesday Evening)
@@ -509,11 +521,12 @@ flowchart TD
     E --> H
     H --> I[Select image]
     I --> J[Overlay appears]
-    J --> K[Pinch to resize if needed]
-    K --> G
-    
+    J --> J1[Position overlay: drag, pinch, rotate]
+    J1 --> J2[Tap Lock]
+    J2 --> G
+
     G --> G1[Time-lapse auto-starts]
-    G1 --> G2[User traces]
+    G1 --> G2[User traces, can zoom/pan viewport]
     
     G2 --> L{Markers lost?}
     L -->|Yes| L1[Indicator: checkmark to triangle + optional audio]
@@ -532,9 +545,10 @@ flowchart TD
 ```
 
 **Key decisions:**
-- Zero friction: from launch to tracing in < 2 minutes
-- Session restoration is automatic, not a modal choice
+- Zero friction: from launch to tracing in < 2 minutes (position + lock + trace)
+- Session restoration is automatic, not a modal choice (lock state preserved)
 - Tracking lost/recovered cycle is visually quiet (corner indicator) + optional audio
+- Viewport zoom/pan available after lock for precise detail work
 
 ### Journey 3: Settings & Break Reminder
 
@@ -575,7 +589,7 @@ flowchart TD
 1. **Minimize steps to value** — From install to first trace in < 10 min. From recurring launch to tracing in < 2 min.
 2. **No dead ends** — Every error state has a recovery path. Permission denied → explain + retry. Markers lost → fixed mode fallback.
 3. **One-time education** — Tooltips, walkthrough steps, and guidance appear once. The app learns that the user knows.
-4. **Automatic over manual** — Session save, time-lapse capture, overlay scaling, session restore — all automatic. User only controls opacity and image selection.
+4. **Automatic over manual** — Session save, time-lapse capture, overlay scaling — all automatic. Session restore is instant on warm return; on cold start, a single-tap dialog confirms intent (image re-selection required due to Android URI permissions). User only controls opacity and image selection.
 
 ## Component Strategy
 
@@ -589,7 +603,7 @@ flowchart TD
 | `Switch` | Settings toggles (audio feedback, break reminder) |
 | `TopAppBar` | Settings/onboarding header |
 | `HorizontalPager` | Onboarding carousel |
-| `AlertDialog` | Stop session confirmation |
+| `AlertDialog` | Stop session confirmation, overlay unlock confirmation |
 | `Surface` | Semi-transparent background for overlay controls |
 | `ListItem` | Settings rows |
 
@@ -635,6 +649,20 @@ flowchart TD
 | Accessibility | "Menu: 4 options" → each option announced individually |
 | Module | `:core:overlay` |
 
+#### LockButton
+
+| Attribute | Detail |
+|-----------|--------|
+| Purpose | Toggle overlay positioning lock — freezes overlay on paper, switches gestures to viewport mode |
+| States | `Unlocked` (positioning mode — overlay adjustable), `Locked` (drawing mode — viewport zoom/pan) |
+| Unlocked appearance | Outlined icon button with open padlock icon, label "Lock" |
+| Locked appearance | Filled icon button with closed padlock icon, label "Locked", teal accent |
+| Position | Bottom-center or near opacity FAB — must be clearly visible but not obstruct drawing |
+| Lock action | Single tap → immediate lock, visual confirmation (icon change + brief snackbar "Overlay locked") |
+| Unlock action | Single tap → confirmation dialog: "Unlock overlay? Your current position will be adjustable again." → Confirm/Cancel |
+| Accessibility | contentDescription: "Lock overlay position" / "Unlock overlay position — currently locked" |
+| Module | `:feature:tracing` |
+
 #### OnboardingOverlay
 
 | Attribute | Detail |
@@ -653,6 +681,7 @@ flowchart TD
 |----------|-----------|-----------|
 | P0 | `TrackingStatusIndicator` | Critical feedback — user MUST know if tracking works |
 | P0 | `OpacityFAB` | Only control actively used during tracing |
+| P0 | `LockButton` | Core workflow gate — separates positioning from drawing mode |
 | P1 | `ExpandableMenu` | Access to secondary functions |
 | P1 | `OnboardingOverlay` | Required for interactive walkthrough |
 
@@ -682,12 +711,14 @@ flowchart TD
 | Tracking OK | Green checkmark (corner) | — | Permanent |
 | Tracking lost | Amber triangle (corner) | Short soft beep (if enabled) | Until recovery |
 | Tracking recovered | Back to green checkmark | Different beep (if enabled) | Permanent |
+| Overlay locked | Icon change (open→closed padlock) + brief snackbar "Overlay locked" | — | 3 seconds |
+| Overlay unlock request | Confirmation dialog: "Unlock overlay?" | — | Until user confirms/cancels |
 | Action succeeded (image loaded, session saved) | M3 Snackbar at bottom, 3s | — | 3 seconds |
 | Permission denied | Explanatory screen with retry button | — | Until action |
 | Break reminder | Gentle snackbar, non-blocking | Soft tone (if audio enabled) | Until dismiss or 10s |
 | System error | Snackbar with "Retry" action | — | Until action |
 
-**Absolute rule:** No blocking feedback (modal) except stop session confirmation. Everything else = non-blocking.
+**Absolute rule:** No blocking feedback (modal) except stop session confirmation and overlay unlock confirmation. Everything else = non-blocking.
 
 ### Navigation Patterns
 
@@ -707,22 +738,27 @@ flowchart TD
 |-------|---------------|------|
 | Empty state (no image loaded) | Icon + text "Tap + to pick an image" centered on camera feed | First launch after onboarding |
 | Loading (image loading) | Circular progress M3 centered | Loading image from gallery |
-| Session restore | No visible state — instant restoration | App returns to foreground |
+| Session restore (warm) | No visible state — instant restoration | App returns to foreground (same process) |
+| Session restore (cold) | AlertDialog "Resume session?" with Resume / New session buttons | App relaunched after process death; Resume restores settings + opens Photo Picker |
 | No camera permission | Fullscreen explanatory + button | Permission denied |
 
 **Rule:** No skeleton screens, no shimmer — the app is too fast (offline) to need them. Loading = simple spinner.
 
 ### Gesture Patterns
 
-| Gesture | Action | Zone |
-|---------|--------|------|
-| Pinch | Resize overlay | Camera feed (center of screen) |
-| Tap | Expand/collapse FAB | On FAB only |
-| Vertical drag | Adjust opacity | On slider (when FAB expanded) |
-| Horizontal swipe | Onboarding pages | Onboarding only |
-| Long press | — | No action (avoid accidentals) |
+| Gesture | Action (Before Lock) | Action (After Lock) | Zone |
+|---------|---------------------|---------------------|------|
+| Drag | Reposition overlay on paper | Pan viewport (camera + overlay together) | Camera feed (center of screen) |
+| Pinch | Resize overlay | Zoom viewport (digital crop) | Camera feed (center of screen) |
+| Two-finger rotate | Rotate overlay | — (no viewport rotation) | Camera feed (center of screen) |
+| Tap | Expand/collapse FAB | Expand/collapse FAB | On FAB only |
+| Vertical drag | Adjust opacity | Adjust opacity | On slider (when FAB expanded) |
+| Horizontal swipe | Onboarding pages | — | Onboarding only |
+| Long press | — | — | No action (avoid accidentals) |
 
-**Rule:** No gesture can accidentally modify the overlay during tracing. Gestures are spatially isolated from drawing zones.
+**Lock workflow:** Before lock, gestures position the overlay image on the paper. After lock, gestures control the viewport (digital crop zoom/pan on the combined camera+overlay view). Opacity and visual modes remain adjustable in both states. Unlock requires a confirmation dialog.
+
+**Rule:** No gesture can accidentally modify the overlay during tracing. After lock, the overlay is frozen — only the viewport can change.
 
 ## Responsive Design & Accessibility
 

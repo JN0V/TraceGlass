@@ -81,11 +81,11 @@ documentCounts:
 
 **Rising Action:** She follows the guide to draw a heart, a star, a cross, and a circle at the corners of her sketchbook page with a felt-tip pen. She balances her phone on a glass of water above the page (MacGyver setup). She picks the portrait from her gallery.
 
-**Climax:** The image appears as an overlay on her sketchbook. She adjusts opacity by sliding on the right edge. She starts tracing the outlines. The "star" marker is correctly detected — the image stays stable even when the glass shifts slightly. **This is the "aha" moment.**
+**Climax:** The image appears as an overlay on her sketchbook. She adjusts opacity by sliding on the right edge. She drags and pinches to align the portrait precisely with her page. She taps "Lock" — the image is now fixed on the paper. The markers are detected, the image stays stable even when the glass shifts slightly. **This is the "aha" moment.** She starts tracing. She pinches to zoom into a detail of the eye she's working on — the camera feed and overlay zoom together.
 
 **Resolution:** 45 minutes later, she has a portrait she's proud of. The time-lapse finishes; she watches it — it's satisfying to see the drawing appear in fast-forward. She shares it with her best friend via WhatsApp.
 
-**Capabilities revealed:** Onboarding, DIY marker guide, MacGyver setup guide, gallery import, overlay, fiducial tracking, opacity control, time-lapse, share intent.
+**Capabilities revealed:** Onboarding, DIY marker guide, MacGyver setup guide, gallery import, overlay, overlay lock, viewport zoom, fiducial tracking, opacity control, time-lapse, share intent.
 
 ### Journey 2: Léa — Recurring Use (Tuesday Evening)
 
@@ -93,13 +93,13 @@ documentCounts:
 
 **Opening Scene:** She opens the app. No onboarding (skipped). Direct camera screen.
 
-**Rising Action:** She picks a stylized cat image from her gallery. Adjusts the overlay size with a pinch gesture. Places phone, starts tracing.
+**Rising Action:** She picks a stylized cat image from her gallery. Adjusts the overlay size and position with drag and pinch gestures. Taps "Lock" — done. Places phone, starts tracing.
 
-**Climax:** Within 2 minutes, she's drawing. Zero friction. The app disappears — she only thinks about her drawing.
+**Climax:** Within 2 minutes, she's drawing. Zero friction. The app disappears — she only thinks about her drawing. She zooms in to trace the cat's whiskers precisely, then zooms back out.
 
 **Resolution:** Drawing done in 30 minutes. Time-lapse saved. She keeps it for herself this time.
 
-**Capabilities revealed:** Skip onboarding, direct camera access, pinch-to-resize overlay, time-lapse auto-capture.
+**Capabilities revealed:** Skip onboarding, direct camera access, overlay positioning + lock, viewport zoom, time-lapse auto-capture.
 
 ### Journey 3: Léa + Friend — Body Art (Phase 2)
 
@@ -297,10 +297,15 @@ Kotlin native selected over TypeScript + Capacitor and Tauri 2.0 due to:
 - **FR12:** System can automatically determine overlay scale based on detected marker spacing
 - **FR13:** System can fall back to fixed-screen overlay when no markers are detected (user positions manually)
 
-### Overlay Positioning
+### Overlay Positioning & Lock
 
-- **FR14:** User can manually reposition the overlay via drag gesture
-- **FR15:** User can manually resize the overlay via pinch gesture
+- **FR14:** User can manually reposition the overlay via drag gesture (before lock)
+- **FR15:** User can manually resize the overlay via pinch gesture (before lock)
+- **FR41:** User can rotate the overlay via rotation gesture (before lock)
+- **FR42:** User can lock the overlay position/scale/rotation relative to the paper ("Lock" action)
+- **FR43:** User can unlock the overlay with a confirmation dialog to return to positioning mode
+- **FR44:** After lock, user can zoom (pinch) and pan (drag) the viewport — camera feed and overlay zoom/pan together (digital crop)
+- **FR45:** After lock, opacity and visual mode controls remain accessible
 
 ### Time-lapse
 
@@ -329,6 +334,7 @@ Kotlin native selected over TypeScript + Capacitor and Tauri 2.0 due to:
 - **FR29:** User can pause and resume time-lapse recording independently
 - **FR30:** System can automatically save session state when app goes to background (phone call, app switch)
 - **FR31:** System can restore full session state when app returns to foreground (overlay position, opacity, image, time-lapse progress)
+- **FR31a:** On cold start (process death), the system presents a dialog offering to resume the previous session; if accepted, settings are restored and the user re-selects the reference image via Photo Picker (temporary URI permissions are lost on process death)
 - **FR32:** System can preserve time-lapse snapshots captured before an interruption
 
 ### User Controls & Settings

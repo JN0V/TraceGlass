@@ -54,6 +54,11 @@ This document provides the complete epic and story breakdown for TraceGlass, dec
 - FR38: User can enable/disable audio feedback for tracking state changes (off by default)
 - FR39: System can remind the user to take a break after a configurable duration of continuous tracing
 - FR40: User can enable/disable and configure break reminder interval (off by default)
+- FR41: User can rotate the overlay via rotation gesture (before lock)
+- FR42: User can lock the overlay position/scale/rotation relative to the paper
+- FR43: User can unlock the overlay with a confirmation dialog to return to positioning mode
+- FR44: After lock, user can zoom and pan the viewport (digital crop on combined camera+overlay view)
+- FR45: After lock, opacity and visual mode controls remain accessible
 
 ### NonFunctional Requirements
 
@@ -130,8 +135,13 @@ This document provides the complete epic and story breakdown for TraceGlass, dec
 | FR11 | 3 | Handle partial marker occlusion |
 | FR12 | 3 | Auto-scale overlay from marker spacing |
 | FR13 | 2 | Fallback to fixed-screen overlay (no markers) |
-| FR14 | 2 | Reposition overlay via drag |
-| FR15 | 2 | Resize overlay via pinch |
+| FR14 | 2 | Reposition overlay via drag (before lock) |
+| FR15 | 2 | Resize overlay via pinch (before lock) |
+| FR41 | 2 | Rotate overlay via gesture (before lock) |
+| FR42 | 2 | Lock overlay position/scale/rotation |
+| FR43 | 2 | Unlock overlay with confirmation |
+| FR44 | 2 | Viewport zoom/pan after lock (digital crop) |
+| FR45 | 2 | Opacity/visual modes accessible after lock |
 | FR16 | 4 | Auto-capture periodic snapshots |
 | FR17 | 4 | Compile snapshots into MP4 |
 | FR18 | 4 | Save time-lapse to shared storage |
@@ -166,9 +176,9 @@ The user can install the app and see a live camera feed with flashlight control.
 **Additional:** 8-module Gradle structure, version catalog, F-Droid repro config, GitHub Actions CI (build + test, NDK pinning, repro flags), JUnit 5 + MockK setup, CameraX integration, camera permission handling.
 
 ### Epic 2: Core Tracing Experience
-The user can load an image from their gallery, overlay it on the camera feed, adjust opacity, color, and transparency mode, reposition and resize the overlay, and start tracing — all in fixed-screen mode without markers.
-**FRs covered:** FR2, FR3, FR4, FR5, FR6, FR13, FR14, FR15, FR33, FR34, FR36
-**Additional:** Photo Picker integration, OpacityFAB component, ExpandableMenu component, overlay rendering via Compose Canvas.
+The user can load an image from their gallery, overlay it on the camera feed, adjust opacity, color, and transparency mode, position the overlay on the paper (drag/pinch/rotate), lock it in place, and start tracing. After lock, the user can zoom and pan the viewport to see details while drawing.
+**FRs covered:** FR2, FR3, FR4, FR5, FR6, FR13, FR14, FR15, FR33, FR34, FR36, FR41, FR42, FR43, FR44, FR45
+**Additional:** Photo Picker integration, OpacityFAB component, ExpandableMenu component, overlay rendering via Compose Canvas, lock/unlock workflow, viewport zoom.
 
 ### Epic 3: Marker Tracking
 The overlay automatically stabilizes via fiducial marker detection. Markers drawn on paper are detected in real-time by OpenCV, and the overlay position/scale adjusts to follow them — enabling true AR tracing.
@@ -385,27 +395,64 @@ So that I can optimize visibility on different paper/drawing combinations.
 **Then** the foreground/background alpha layers swap
 **And** the change is visible immediately
 
-### Story 2.5: Overlay Positioning (Drag & Pinch)
+### Story 2.5: Overlay Positioning (Drag, Pinch, Rotate) — Before Lock
 
 As a user,
-I want to manually reposition and resize the overlay,
-So that I can align the reference image precisely with my paper.
+I want to manually reposition, resize, and rotate the overlay,
+So that I can align the reference image precisely with my paper before locking.
 
 **Acceptance Criteria:**
 
-**Given** an overlay is displayed in fixed-screen mode (no markers)
+**Given** the overlay is in positioning mode (not locked)
 **When** the user drags on the overlay area
 **Then** the overlay repositions following the finger movement
 **And** the movement is smooth (no jitter)
 
-**Given** an overlay is displayed
+**Given** the overlay is in positioning mode
 **When** the user performs a pinch gesture
 **Then** the overlay resizes proportionally from the pinch center
 **And** there is no minimum or maximum hard limit that blocks the gesture
 
-**Given** an overlay is displayed
-**When** the user performs both drag and pinch simultaneously
-**Then** both reposition and resize are applied correctly
+**Given** the overlay is in positioning mode
+**When** the user performs a rotation gesture (two-finger twist)
+**Then** the overlay rotates around its center
+
+**Given** the overlay is in positioning mode
+**When** the user performs drag, pinch, and rotate simultaneously
+**Then** all three transforms are applied correctly
+
+### Story 2.7: Overlay Lock & Viewport Zoom
+
+As a user,
+I want to lock the overlay position so it stays fixed on my paper while I draw,
+So that I don't accidentally move the reference image while tracing.
+
+**Acceptance Criteria:**
+
+**Given** the overlay is in positioning mode and an image is loaded
+**When** the user taps the "Lock" button
+**Then** the overlay position, scale, and rotation are frozen relative to the paper (FR42)
+**And** drag/pinch/rotate gestures no longer move the overlay image
+**And** drag/pinch gestures now control the viewport (digital crop zoom/pan on the combined camera+overlay view) (FR44)
+**And** a visual indicator shows the overlay is locked
+
+**Given** the overlay is locked
+**When** the user pinch-zooms
+**Then** the entire view (camera feed + overlay together) zooms in/out like a digital crop
+**And** the overlay stays aligned with the paper (markers continue tracking)
+
+**Given** the overlay is locked
+**When** the user drags
+**Then** the viewport pans within the zoomed view
+
+**Given** the overlay is locked
+**When** the user taps the "Unlock" button
+**Then** a confirmation dialog appears: "Unlock overlay? Your current position will be adjustable again." (FR43)
+**And** if confirmed, the overlay returns to positioning mode and the viewport resets to 1x zoom
+
+**Given** the overlay is locked
+**When** the user adjusts opacity or changes visual mode
+**Then** the changes apply immediately (opacity and visual modes are not locked) (FR45)
 
 ### Story 2.6: Tracing Session & Control Visibility
 
@@ -638,10 +685,16 @@ So that I can continue tracing exactly where I left off.
 **Acceptance Criteria:**
 
 **Given** a session was saved when the app went to background
-**When** the app returns to foreground
+**When** the app returns to foreground (same process, e.g. app switch)
 **Then** the overlay image, position, scale, opacity, color tint, and inverted mode are restored exactly as they were (FR31)
 **And** the restoration is instant (no visible loading for session state)
 **And** the camera feed resumes automatically
+
+**Given** a session was saved but the app was killed (cold start / process death)
+**When** the app is relaunched
+**Then** a dialog "Resume session?" is shown offering to resume with the same settings (FR31a)
+**And** if the user accepts, opacity, color tint, and inverted mode are restored, and the Photo Picker opens for re-selecting the reference image (temporary URI permissions are lost on process death)
+**And** if the user declines ("New session"), the saved session is cleared
 
 **Given** the saved image URI is no longer accessible (user deleted the image)
 **When** session restore is attempted
@@ -829,29 +882,41 @@ So that I can identify TraceGlass on my home screen and know its version and lic
 
 Enhanced tracking features that improve overlay accuracy beyond simple translation, scale, and rotation.
 
-### Story 8.1: Perspective Correction via Marker Homography
+### Story 8.1: Perspective Correction via 4-Marker Homography
 
 As a user,
 I want the overlay image to automatically compensate for the angle between my phone and the drawing surface,
 So that the projected image lines up accurately with my paper even when my phone isn't perfectly parallel.
 
+**Context:** Perspective correction requires all 4 ArUco markers (one per corner of the paper). During the initial calibration frame (all 4 markers visible), the system estimates the camera's focal length from the known rectangular paper geometry using the homography orthogonality constraint. When 3 markers are visible, the system uses the calibrated focal length and known paper rectangle to solve a constrained homography, projecting the hidden 4th corner with sub-5px accuracy even at 20° tilt.
+
 **Acceptance Criteria:**
 
-**Given** two markers are detected and the phone is perfectly parallel to the surface
+**Given** 4 markers are detected and the phone is perfectly parallel to the surface
 **When** the overlay is displayed
 **Then** the overlay renders identically to the current behavior (no regression)
 
-**Given** two markers are detected and the phone is tilted relative to the surface
+**Given** 4 markers are detected and the phone is tilted relative to the surface
 **When** the overlay is displayed
-**Then** the overlay is warped with a perspective correction so that its projection on the paper matches the reference image geometry
+**Then** the system extracts the camera focal length from the initial calibration homography
+**And** the overlay is warped with a perspective correction so that its projection on the paper matches the reference image geometry
+
+**Given** 3 markers are visible and the focal length was calibrated from a prior 4-marker frame
+**When** the overlay is displayed
+**Then** the hidden 4th corner is estimated via constrained homography (paper geometry + focal length)
+**And** the estimation error is < 5px at up to 20° tilt (vs ~100px with affine-only)
 
 **Given** perspective correction is active
 **When** the phone tilt changes smoothly
 **Then** the overlay correction updates smoothly without jitter (temporal smoothing)
 
-**Given** only one marker is detected
+**Given** fewer than 3 markers are detected
 **When** the overlay is displayed
-**Then** perspective correction is disabled and the overlay uses the current affine transform (translation + scale + rotation only)
+**Then** perspective correction is disabled and the overlay uses the current affine/similarity transform (translation + scale + rotation only)
+
+**Given** the initial calibration frame is taken with the phone already tilted (non-rectangular reference)
+**When** the user provides the camera focal length via CameraX intrinsics or the `setFocalLength()` API
+**Then** the system rebuilds paper coordinates to correct aspect ratio distortion and enables perspective correction
 
 **Given** the user opens Settings
 **When** they look at the tracking section

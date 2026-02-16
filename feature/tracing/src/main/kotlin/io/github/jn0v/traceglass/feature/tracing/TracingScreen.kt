@@ -24,9 +24,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.FlashlightOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
@@ -71,8 +73,20 @@ import io.github.jn0v.traceglass.core.overlay.MatrixUtils
 import io.github.jn0v.traceglass.feature.tracing.components.OpacityFab
 import io.github.jn0v.traceglass.feature.tracing.components.TrackingIndicator
 import io.github.jn0v.traceglass.feature.tracing.components.VisualModeControls
+import java.io.File
 import org.koin.compose.koinInject
 import org.koin.androidx.compose.koinViewModel
+
+private fun copyImageToInternal(context: android.content.Context, sourceUri: Uri): Uri? {
+    return try {
+        val input = context.contentResolver.openInputStream(sourceUri) ?: return null
+        val file = File(context.filesDir, "reference_image")
+        file.outputStream().use { output -> input.use { it.copyTo(output) } }
+        Uri.fromFile(file)
+    } catch (_: Exception) {
+        null
+    }
+}
 
 @Composable
 fun TracingScreen(
@@ -84,6 +98,7 @@ fun TracingScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // Collect render matrix as a separate State — read only in draw phase to avoid recomposition
     val renderMatrixState = viewModel.renderMatrix.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
@@ -118,7 +133,28 @@ fun TracingScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        viewModel.onImageSelected(uri)
+        uri?.let {
+            val internalUri = copyImageToInternal(context, it)
+            viewModel.onImageSelected(internalUri ?: it)
+        }
+    }
+
+    if (uiState.showResumeSessionDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.onResumeSessionDeclined() },
+            title = { Text("Resume session?") },
+            text = { Text("A previous tracing session was found. Resume with the same settings?") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.onResumeSessionAccepted() }) {
+                    Text("Resume")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onResumeSessionDeclined() }) {
+                    Text("New session")
+                }
+            }
+        )
     }
 
     when (uiState.permissionState) {

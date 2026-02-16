@@ -16,7 +16,9 @@ import io.github.jn0v.traceglass.core.session.SessionData
 import io.github.jn0v.traceglass.core.session.SessionRepository
 import io.github.jn0v.traceglass.core.session.SettingsRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -47,7 +49,10 @@ class TracingViewModel(
     private var breakReminderIntervalMinutes = 30
     private var audioFeedbackEnabled = false
     private var breakTimerJob: Job? = null
+    private var debounceSaveJob: Job? = null
 
+    private var restoreAttempted = false
+    private var restoreCompleted = false
     private var previousTransform: OverlayTransform = OverlayTransform.IDENTITY
     private var manualOffset: Offset = Offset.Zero
     private var manualScaleFactor: Float = 1f
@@ -99,10 +104,12 @@ class TracingViewModel(
     fun onImageSelected(uri: Uri?) {
         uri ?: return
         _uiState.update { it.copy(overlayImageUri = uri) }
+        viewModelScope.launch { saveSession() }
     }
 
     fun onOpacityChanged(opacity: Float) {
         _uiState.update { it.copy(overlayOpacity = opacity.coerceIn(0f, 1f)) }
+        debounceSave()
     }
 
     fun onToggleOpacitySlider() {
@@ -111,25 +118,38 @@ class TracingViewModel(
 
     fun onColorTintChanged(tint: ColorTint) {
         _uiState.update { it.copy(colorTint = tint) }
+        debounceSave()
     }
 
     fun onToggleInvertedMode() {
         _uiState.update { it.copy(isInvertedMode = !it.isInvertedMode) }
+        debounceSave()
     }
 
     fun onOverlayDrag(delta: Offset) {
         manualOffset += delta
         updateOverlayFromCombined()
+        debounceSave()
     }
 
     fun onOverlayScale(scaleFactor: Float) {
         manualScaleFactor *= scaleFactor
         updateOverlayFromCombined()
+        debounceSave()
     }
 
     fun onOverlayRotate(angleDelta: Float) {
         manualRotation += angleDelta
         updateOverlayFromCombined()
+        debounceSave()
+    }
+
+    private fun debounceSave() {
+        debounceSaveJob?.cancel()
+        debounceSaveJob = viewModelScope.launch {
+            delay(500)
+            saveSession()
+        }
     }
 
     fun setViewDimensions(width: Float, height: Float) {
@@ -151,37 +171,78 @@ class TracingViewModel(
     }
 
     suspend fun saveSession() {
+
+        if (!restoreCompleted) return
         val repo = sessionRepository ?: return
         val state = _uiState.value
-        repo.save(
-            SessionData(
-                imageUri = state.overlayImageUri?.toString(),
-                overlayOffsetX = state.overlayOffset.x,
-                overlayOffsetY = state.overlayOffset.y,
-                overlayScale = state.overlayScale,
-                overlayOpacity = state.overlayOpacity,
-                colorTint = state.colorTint.name,
-                isInvertedMode = state.isInvertedMode,
-                isSessionActive = state.isSessionActive
+
+        withContext(NonCancellable) {
+            repo.save(
+                SessionData(
+                    imageUri = state.overlayImageUri?.toString(),
+                    overlayOffsetX = state.overlayOffset.x,
+                    overlayOffsetY = state.overlayOffset.y,
+                    overlayScale = state.overlayScale,
+                    overlayRotation = state.overlayRotation,
+                    overlayOpacity = state.overlayOpacity,
+                    colorTint = state.colorTint.name,
+                    isInvertedMode = state.isInvertedMode,
+                    isSessionActive = state.isSessionActive
+                )
             )
-        )
+
+        }
     }
 
     suspend fun restoreSession() {
-        val repo = sessionRepository ?: return
+
+        if (restoreAttempted) return
+        restoreAttempted = true
+        val repo = sessionRepository ?: run {
+
+            restoreCompleted = true
+            return
+        }
         val data = repo.sessionData.first()
-        if (!data.hasActiveSession) return
+
+        if (!data.hasActiveSession) {
+            restoreCompleted = true
+            return
+        }
+        // Store pending restore data and show dialog
+        pendingRestoreData = data
+
+        _uiState.update { it.copy(showResumeSessionDialog = true) }
+    }
+
+    private var pendingRestoreData: SessionData? = null
+
+    fun onResumeSessionAccepted() {
+        val data = pendingRestoreData ?: return
+        val imageUri = data.imageUri?.let { Uri.parse(it) }
+
+        manualOffset = Offset(data.overlayOffsetX, data.overlayOffsetY)
+        manualScaleFactor = data.overlayScale
+        manualRotation = data.overlayRotation
         _uiState.update {
             it.copy(
-                overlayImageUri = data.imageUri?.let { uri -> Uri.parse(uri) },
-                overlayOffset = Offset(data.overlayOffsetX, data.overlayOffsetY),
-                overlayScale = data.overlayScale,
+                showResumeSessionDialog = false,
+                overlayImageUri = imageUri,
                 overlayOpacity = data.overlayOpacity,
                 colorTint = ColorTint.entries.find { t -> t.name == data.colorTint } ?: ColorTint.NONE,
-                isInvertedMode = data.isInvertedMode,
-                isSessionActive = data.isSessionActive
+                isInvertedMode = data.isInvertedMode
             )
         }
+        pendingRestoreData = null
+        restoreCompleted = true
+        updateOverlayFromCombined()
+    }
+
+    fun onResumeSessionDeclined() {
+        pendingRestoreData = null
+        restoreCompleted = true
+        _uiState.update { it.copy(showResumeSessionDialog = false) }
+        viewModelScope.launch { sessionRepository?.clear() }
     }
 
     fun onBreakReminderDismissed() {
