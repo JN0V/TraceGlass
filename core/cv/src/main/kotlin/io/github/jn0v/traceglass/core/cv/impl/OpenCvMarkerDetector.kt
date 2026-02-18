@@ -1,5 +1,7 @@
-package io.github.jn0v.traceglass.core.cv
+package io.github.jn0v.traceglass.core.cv.impl
 
+import io.github.jn0v.traceglass.core.cv.MarkerDetector
+import io.github.jn0v.traceglass.core.cv.MarkerResult
 import java.nio.ByteBuffer
 
 class OpenCvMarkerDetector : MarkerDetector {

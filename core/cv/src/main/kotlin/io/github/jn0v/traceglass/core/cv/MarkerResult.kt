@@ -9,11 +9,3 @@ data class MarkerResult(
     val isTracking: Boolean get() = markers.isNotEmpty()
     val markerCount: Int get() = markers.size
 }
-
-data class DetectedMarker(
-    val id: Int,
-    val centerX: Float,
-    val centerY: Float,
-    val corners: List<Pair<Float, Float>>,
-    val confidence: Float
-)

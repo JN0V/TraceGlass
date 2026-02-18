@@ -4,17 +4,19 @@ import android.content.Context
 import android.media.AudioManager
 import android.media.RingtoneManager
 import android.media.ToneGenerator
-import android.os.Handler
-import android.os.Looper
 
 class AudioFeedbackPlayer(private val context: Context) {
 
-    private val handler = Handler(Looper.getMainLooper())
+    private var toneGenerator: ToneGenerator? = null
+    private var isReleased = false
 
     fun playBreakReminderTone() {
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        val ringtone = RingtoneManager.getRingtone(context, uri)
-        ringtone?.play()
+        if (isReleased) return
+        try {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val ringtone = RingtoneManager.getRingtone(context, uri)
+            ringtone?.play()
+        } catch (_: Exception) { }
     }
 
     fun playTrackingGainedTone() {
@@ -26,8 +28,20 @@ class AudioFeedbackPlayer(private val context: Context) {
     }
 
     private fun playTone(toneType: Int, durationMs: Int) {
-        val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
-        toneGen.startTone(toneType, durationMs)
-        handler.postDelayed({ toneGen.release() }, durationMs + 100L)
+        if (isReleased) return
+        val gen = toneGenerator ?: try {
+            ToneGenerator(AudioManager.STREAM_MUSIC, 80).also { toneGenerator = it }
+        } catch (_: RuntimeException) { return }
+        try {
+            gen.startTone(toneType, durationMs)
+        } catch (_: RuntimeException) { }
+    }
+
+    fun release() {
+        isReleased = true
+        try {
+            toneGenerator?.release()
+        } catch (_: RuntimeException) { }
+        toneGenerator = null
     }
 }

@@ -16,6 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.jn0v.traceglass.feature.tracing.TrackingState
 
@@ -26,8 +28,14 @@ fun TrackingIndicator(
 ) {
     if (trackingState == TrackingState.INACTIVE) return
 
+    val description = when (trackingState) {
+        TrackingState.TRACKING -> "Marker tracking active"
+        TrackingState.LOST -> "Marker tracking lost"
+        else -> ""
+    }
     Row(
         modifier = modifier
+            .semantics(mergeDescendants = true) { contentDescription = description }
             .background(
                 color = Color.Black.copy(alpha = 0.5f),
                 shape = MaterialTheme.shapes.small

@@ -83,6 +83,42 @@ class TrackingStateManagerTest {
         }
 
         @Test
+        fun `flicker cycle - repeated brief losses stay TRACKING`() {
+            var time = 0L
+            val manager = TrackingStateManager(
+                lostTimeoutMs = 500L,
+                timeProvider = { time }
+            )
+            // Initial detection
+            manager.onMarkerResult(trackingResult())
+
+            // First brief loss (200ms) — within grace
+            time = 200L
+            manager.onMarkerResult(emptyResult())
+            assertEquals(TrackingStatus.TRACKING, manager.status)
+
+            // Recovery
+            time = 300L
+            manager.onMarkerResult(trackingResult())
+            assertEquals(TrackingStatus.TRACKING, manager.status)
+
+            // Second brief loss (200ms after recovery) — grace period resets
+            time = 500L
+            manager.onMarkerResult(emptyResult())
+            assertEquals(TrackingStatus.TRACKING, manager.status)
+
+            // Recovery again
+            time = 600L
+            manager.onMarkerResult(trackingResult())
+            assertEquals(TrackingStatus.TRACKING, manager.status)
+
+            // Third loss but this time exceeds timeout (600ms after last detection)
+            time = 1200L
+            manager.onMarkerResult(emptyResult())
+            assertEquals(TrackingStatus.LOST, manager.status)
+        }
+
+        @Test
         fun `partial occlusion with remaining markers stays TRACKING`() {
             val manager = TrackingStateManager()
             val twoMarkers = MarkerResult(listOf(marker(0), marker(1)), 5L)

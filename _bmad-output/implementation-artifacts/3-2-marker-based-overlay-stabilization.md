@@ -123,13 +123,26 @@ Claude Opus 4.6
 - `computeSmoothed()` was not called initially in ViewModel (fixed in follow-up commit ed196a2)
 - Manual adjustments were overwritten by marker updates initially (fixed: separate `manualOffset` + `markerTransform`)
 - Reference angle/spacing independently tracked for single-marker vs two-marker modes
-- 55 total tests passing after this story (8 new overlay tests + 5 new ViewModel tests)
+- Tests at story completion: 35 overlay tests + 6 FrameAnalyzer tests + 14 ViewModel tracking tests (subset of full suite)
+- Code review (2026-02-18): 3 HIGH, 4 MEDIUM, 3 LOW findings. All HIGH/MEDIUM auto-fixed:
+  - H1: FrameAnalyzer.kt + test added to File List
+  - H2: `analysisExecutor.shutdown()` added to CameraXManager.unbind()
+  - H3: KDoc added to `extractOuterCorners` explaining ArUco corner convention
+  - M1: `sessionRepository`/`settingsRepository` made non-null in TracingViewModel
+  - M2: Early return in `computeSmoothed()` to skip outer EMA for paper corners path (double-smoothing)
+  - M3: Withdrawn — FrameAnalyzerTest already existed (6 tests)
+  - M4: This completion notes update + File List correction
+- Code review 2 (2026-02-18): 2 MEDIUM findings fixed:
+  - M1: Thread-safety KDoc added to OverlayTransformCalculator class header
+  - M2: `computeMaxSpacing` marker-set-change limitation documented with inline comment
 
 ### Change Log
 
 - 2026-02-08: Initial implementation — commit 70965ad
 - 2026-02-09: Single-marker support + frame scaling fix — commit ed196a2
 - 2026-02-09: Rotation tracking + dynamic frame dimensions — commit 5596c3b
+- 2026-02-18: Code review 1 fixes — H2 executor leak, H3 KDoc, M1 non-null repos, M2 double-smoothing
+- 2026-02-18: Code review 2 fixes — M1 thread-safety KDoc on OverlayTransformCalculator, M2 computeMaxSpacing limitation documented
 
 ### File List
 
@@ -137,12 +150,14 @@ Claude Opus 4.6
 - core/overlay/src/main/kotlin/io/github/jn0v/traceglass/core/overlay/OverlayTransform.kt
 - core/overlay/src/main/kotlin/io/github/jn0v/traceglass/core/overlay/OverlayTransformCalculator.kt
 - core/overlay/src/test/kotlin/io/github/jn0v/traceglass/core/overlay/OverlayTransformCalculatorTest.kt
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/FrameAnalyzer.kt
+- feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/FrameAnalyzerTest.kt
 
 **Modified files:**
 - core/camera/src/main/kotlin/io/github/jn0v/traceglass/core/camera/CameraManager.kt (optional Analyzer param)
-- core/camera/src/main/kotlin/io/github/jn0v/traceglass/core/camera/impl/CameraXManager.kt (ImageAnalysis use case)
+- core/camera/src/main/kotlin/io/github/jn0v/traceglass/core/camera/impl/CameraXManager.kt (ImageAnalysis use case + executor shutdown fix)
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingScreen.kt (marker result collection)
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingUiState.kt (TrackingState enum)
-- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModel.kt (onMarkerResultReceived)
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModel.kt (onMarkerResultReceived, non-null repos)
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/di/TracingModule.kt (FrameAnalyzer + calculator DI)
 - feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModelTest.kt (tracking tests)

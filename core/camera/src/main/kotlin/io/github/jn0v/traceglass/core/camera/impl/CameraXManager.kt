@@ -92,6 +92,7 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
         cameraProvider = null
         camera = null
         _isTorchOn.value = false
+        analysisExecutor.shutdown()
     }
 
     override fun toggleTorch() {

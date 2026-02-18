@@ -19,6 +19,11 @@ import kotlin.math.sqrt
  * - 2 markers: compute similarity delta from 2 visible, apply to hidden
  * - 1 marker: compute translation delta from 1 visible, apply to hidden
  * - 0 markers: hold last known corners
+ *
+ * **Thread safety:** This class is **not** thread-safe. All calls to [compute],
+ * [computeSmoothed], [setFocalLength], and [resetReference] must be made from
+ * the same thread (typically the CameraX analysis callback thread). The caller
+ * is responsible for ensuring sequential access.
  */
 class OverlayTransformCalculator(
     private val smoothingFactor: Float = 0.12f
@@ -390,6 +395,11 @@ class OverlayTransformCalculator(
         val target = compute(result, frameWidth, frameHeight)
         if (smoothingFactor >= 1f) return target
 
+        // Paper corners path: corners are already smoothed via internal EMA in compute().
+        // Skip outer EMA to avoid double-smoothing; rendering uses paperCornersFrame
+        // homography, not the fallback offset/scale/rotation values.
+        if (target.paperCornersFrame != null) return target
+
         return OverlayTransform(
             offsetX = lerp(previous.offsetX, target.offsetX, smoothingFactor),
             offsetY = lerp(previous.offsetY, target.offsetY, smoothingFactor),
@@ -473,6 +483,15 @@ class OverlayTransformCalculator(
         lastTransform = OverlayTransform.IDENTITY
     }
 
+    /**
+     * Extracts one outer corner per paper-corner marker.
+     *
+     * Convention: marker ID matches its paper position (TL=0, TR=1, BR=2, BL=3).
+     * ArUco returns corners in the same order, so `marker.corners[id]` is the
+     * physical outer corner closest to the paper corner where the marker sits.
+     *
+     * The `corners.size < 4` guard ensures the index is always in bounds.
+     */
     private fun extractOuterCorners(markerById: Map<Int, DetectedMarker>): Map<Int, Pair<Float, Float>> {
         val corners = mutableMapOf<Int, Pair<Float, Float>>()
         for (id in 0..3) {
@@ -508,6 +527,9 @@ class OverlayTransformCalculator(
         return Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
     }
 
+    // Note: max pairwise distance is used for scale. If the visible marker set changes
+    // (e.g. markers 0,1 → markers 0,3), the scale may jump because the max distance
+    // differs. This is acceptable for the affine fallback path (pre-reference only).
     private fun computeMaxSpacing(markers: List<DetectedMarker>): Float {
         var maxDist = 0f
         for (i in markers.indices) {

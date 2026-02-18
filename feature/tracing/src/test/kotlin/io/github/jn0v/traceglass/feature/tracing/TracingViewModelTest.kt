@@ -56,11 +56,13 @@ class TracingViewModelTest {
         flashlightController: FakeFlashlightController = fakeFlashlight,
         trackingStateManager: TrackingStateManager? = null,
         sessionRepository: FakeSessionRepository = FakeSessionRepository(),
+        settingsRepository: FakeSettingsRepository = FakeSettingsRepository(),
         transformCalculator: OverlayTransformCalculator? = null
     ) = TracingViewModel(
         flashlightController = flashlightController,
         trackingStateManager = trackingStateManager ?: TrackingStateManager(),
         sessionRepository = sessionRepository,
+        settingsRepository = settingsRepository,
         transformCalculator = transformCalculator ?: OverlayTransformCalculator(smoothingFactor = 1f)
     )
 
@@ -749,6 +751,7 @@ class TracingViewModelTest {
             settingsRepo: FakeSettingsRepository = FakeSettingsRepository()
         ) = TracingViewModel(
             flashlightController = fakeFlashlight,
+            sessionRepository = FakeSessionRepository(),
             settingsRepository = settingsRepo
         )
 
