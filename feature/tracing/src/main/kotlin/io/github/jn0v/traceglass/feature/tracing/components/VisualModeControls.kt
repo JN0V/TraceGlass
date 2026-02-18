@@ -1,11 +1,10 @@
 package io.github.jn0v.traceglass.feature.tracing.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,23 +22,20 @@ fun VisualModeControls(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        Row {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ColorTint.entries.forEach { tint ->
                 FilterChip(
                     selected = colorTint == tint,
                     onClick = { onColorTintChanged(tint) },
-                    label = { Text(tint.label, style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.height(32.dp)
+                    label = { Text(tint.label, style = MaterialTheme.typography.labelSmall) }
                 )
-                Spacer(modifier = Modifier.width(4.dp))
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
         FilterChip(
             selected = isInvertedMode,
             onClick = onToggleInvertedMode,
-            label = { Text("Inverted", style = MaterialTheme.typography.labelSmall) },
-            modifier = Modifier.height(32.dp)
+            label = { Text("Inverted", style = MaterialTheme.typography.labelSmall) }
         )
     }
 }

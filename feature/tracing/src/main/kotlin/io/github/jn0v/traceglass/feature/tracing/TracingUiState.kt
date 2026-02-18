@@ -2,6 +2,10 @@ package io.github.jn0v.traceglass.feature.tracing
 
 import android.net.Uri
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 
 data class TracingUiState(
     val permissionState: PermissionState = PermissionState.NOT_REQUESTED,
@@ -21,8 +25,17 @@ data class TracingUiState(
     val detectedMarkerCount: Int = 0,
     val showBreakReminder: Boolean = false,
     val audioFeedbackEnabled: Boolean = false,
-    val showResumeSessionDialog: Boolean = false
-)
+    val showResumeSessionDialog: Boolean = false,
+    val isOverlayLocked: Boolean = false,
+    val viewportZoom: Float = 1f,
+    val viewportPanX: Float = 0f,
+    val viewportPanY: Float = 0f,
+    val showUnlockConfirmDialog: Boolean = false,
+    val showLockSnackbar: Boolean = false
+) {
+    val effectiveOpacity: Float
+        get() = if (isInvertedMode) 1f - overlayOpacity else overlayOpacity
+}
 
 enum class TrackingState {
     INACTIVE,
@@ -37,22 +50,22 @@ enum class ColorTint {
     BLUE,
     GRAYSCALE;
 
-    fun toColorFilter(): androidx.compose.ui.graphics.ColorFilter? = when (this) {
+    fun toColorFilter(): ColorFilter? = when (this) {
         NONE -> null
-        RED -> androidx.compose.ui.graphics.ColorFilter.tint(
-            androidx.compose.ui.graphics.Color.Red.copy(alpha = 0.5f),
-            androidx.compose.ui.graphics.BlendMode.Modulate
+        RED -> ColorFilter.tint(
+            Color.Red.copy(alpha = 0.5f),
+            BlendMode.Modulate
         )
-        GREEN -> androidx.compose.ui.graphics.ColorFilter.tint(
-            androidx.compose.ui.graphics.Color.Green.copy(alpha = 0.5f),
-            androidx.compose.ui.graphics.BlendMode.Modulate
+        GREEN -> ColorFilter.tint(
+            Color.Green.copy(alpha = 0.5f),
+            BlendMode.Modulate
         )
-        BLUE -> androidx.compose.ui.graphics.ColorFilter.tint(
-            androidx.compose.ui.graphics.Color.Blue.copy(alpha = 0.5f),
-            androidx.compose.ui.graphics.BlendMode.Modulate
+        BLUE -> ColorFilter.tint(
+            Color.Blue.copy(alpha = 0.5f),
+            BlendMode.Modulate
         )
-        GRAYSCALE -> androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-            androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) }
+        GRAYSCALE -> ColorFilter.colorMatrix(
+            ColorMatrix().apply { setToSaturation(0f) }
         )
     }
 }

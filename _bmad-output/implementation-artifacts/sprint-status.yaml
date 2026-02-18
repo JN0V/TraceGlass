@@ -41,23 +41,24 @@ story_location: /home/seb/CascadeProjects/TraceGlass/_bmad-output/implementation
 
 development_status:
   # Epic 1: Project Foundation & Camera Feed
+  # CODE REVIEW (2026-02-17): 9 findings (1H, 4M, 4L) — stories with HIGH/MEDIUM set back to in-progress
   epic-1: done
-  1-1-project-scaffolding-multi-module-structure: done
-  1-2-f-droid-reproducibility-configuration: done
-  1-3-github-actions-ci-pipeline: done
-  1-4-live-camera-feed: done
-  1-5-flashlight-toggle: done
+  1-1-project-scaffolding-multi-module-structure: done # 1 LOW only
+  1-2-f-droid-reproducibility-configuration: done # Code review #2 passed: deprecated API fix + stale Dev Notes fix. All ACs verified.
+  1-3-github-actions-ci-pipeline: done # Code review #3: README roadmap fixed, wrapper validation + timeout added. 1 LOW deferred (OpenCV checksum).
+  1-4-live-camera-feed: done # Code review #2 passed: FrameAnalyzer catch, AudioPlayer cache, file extension, imports cleanup. 96 tests.
+  1-5-flashlight-toggle: done # 1 LOW only
   epic-1-retrospective: optional
 
   # Epic 2: Core Tracing Experience
   epic-2: in-progress
-  2-1-image-import-via-photo-picker: done
-  2-2-overlay-rendering-on-camera-feed: done
-  2-3-opacity-control: done
-  2-4-overlay-visual-modes: done
-  2-5-overlay-positioning: done
-  2-6-tracing-session-control-visibility: in-progress # WIP: ExpandableMenu FAB + 5s auto-collapse manquants
-  2-7-overlay-lock-viewport-zoom: backlog # Lock/unlock + viewport zoom pas commencé
+  2-1-image-import-via-photo-picker: done # Review follow-ups resolved: AC2 text fixed, ImageFileHelper tests added
+  2-2-overlay-rendering-on-camera-feed: done # Code review #2 passed: HomographySolver tests (13), File List fixed, gaussianEliminationN private. 266 tests.
+  2-3-opacity-control: done # Bug fixes complete: auto-collapse timer + vertical slider, 87 tests pass, 4 new Compose UI tests
+  2-4-overlay-visual-modes: done # Code review #2 passed: touch targets, effectiveOpacity tests, spacedBy layout. 100 tests.
+  2-5-overlay-positioning: done # All 3 Low review follow-ups resolved: centroid pivot, batched recompute, combined AC4 test
+  2-6-tracing-session-control-visibility: done # Code review passed: items order + animation direction fixed. 2 LOW deferred.
+  2-7-overlay-lock-viewport-zoom: done # Code review passed: H1 snackbar fix, M1 pan re-clamp, M2 debounceSave, M3 task 9.5 unchecked. 125 tests.
   epic-2-retrospective: optional
 
   # Epic 3: Marker Tracking
@@ -69,14 +70,13 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Time-lapse Capture & Sharing
-  # NOTE: All 4 stories have isolated implementations + unit tests,
-  # but NONE are wired into the app (no DI, no ViewModel integration, no UI).
-  # Missing: Koin timelapseModule, TracingViewModel integration, FrameAnalyzer JPEG capture, UI controls.
+  # Isolated implementations + unit tests exist (40 tests pass).
+  # Story files created 2026-02-17 — focus on WIRING: DI, ViewModel, FrameAnalyzer, UI.
   epic-4: in-progress
-  4-1-automatic-snapshot-capture: in-progress # WIP: TimelapseSession + FileSnapshotStorage exist but not wired — no frame capture, no DI, no UI
-  4-2-mp4-video-compilation: in-progress # WIP: MediaCodecCompiler exists but never called — no trigger on session stop
-  4-3-timelapse-export-sharing: in-progress # WIP: MediaStoreVideoExporter + VideoSharer exist but never called — no export/share UI
-  4-4-timelapse-snapshot-preservation: in-progress # WIP: FileSnapshotStorage persists to disk but never called — no lifecycle hooks
+  4-1-automatic-snapshot-capture: ready-for-dev # Story created: Koin DI module, FrameAnalyzer JPEG capture, ViewModel integration, UI controls
+  4-2-mp4-video-compilation: ready-for-dev # Story created: wire MediaCodecCompiler, trigger on stop, progress UI
+  4-3-timelapse-export-sharing: ready-for-dev # Story created: wire MediaStoreVideoExporter + VideoSharer, post-compilation UI
+  4-4-timelapse-snapshot-preservation: ready-for-dev # Story created: session save/restore lifecycle hooks, cold start recovery
   epic-4-retrospective: optional
 
   # Epic 5: Session Persistence
@@ -106,5 +106,8 @@ development_status:
 
   # Epic 8: Advanced Tracking & Perspective
   epic-8: in-progress
-  8-1-perspective-correction-via-4-marker-homography: in-progress # WIP: intégration CameraX intrinsics → setFocalLength() manquante
+  8-1-perspective-correction: done # Homography solver, MatrixUtils, paper-mapping rendering, settings toggle
+  8-2-paper-size-agnostic-4-marker-reference: done # 4 ArUco markers, auto-f estimation, AR correction, setFocalLength API
+  8-3-3-marker-constrained-homography: done # Newton-Raphson constrained H, delta fallback hierarchy, sub-5px at 20°
+  8-4-camerax-intrinsics-integration: ready-for-dev # Wire CameraX focal length → setFocalLength()
   epic-8-retrospective: optional

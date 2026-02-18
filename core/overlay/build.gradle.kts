@@ -6,21 +6,6 @@ plugins {
 
 android {
     namespace = "io.github.jn0v.traceglass.core.overlay"
-    compileSdk = 36
-    buildToolsVersion = "34.0.0"
-
-    defaultConfig {
-        minSdk = 33
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 
     buildFeatures {
         compose = true
@@ -41,6 +26,3 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
-}

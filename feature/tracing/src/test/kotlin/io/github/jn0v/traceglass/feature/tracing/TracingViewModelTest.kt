@@ -2,6 +2,7 @@ package io.github.jn0v.traceglass.feature.tracing
 
 import android.net.Uri
 import androidx.compose.ui.geometry.Offset
+import io.github.jn0v.traceglass.core.camera.FlashlightController
 import io.github.jn0v.traceglass.core.cv.DetectedMarker
 import io.github.jn0v.traceglass.core.cv.MarkerResult
 import io.github.jn0v.traceglass.core.overlay.OverlayTransformCalculator
@@ -12,6 +13,9 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.github.jn0v.traceglass.feature.tracing.settings.FakeSettingsRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -172,6 +176,20 @@ class TracingViewModelTest {
         }
 
         @Test
+        fun `isSessionActive drives wake lock state`() {
+            // Wake lock (FLAG_KEEP_SCREEN_ON) is wired via DisposableEffect in Compose.
+            // This test verifies the ViewModel state that drives it.
+            val viewModel = createViewModel()
+            assertFalse(viewModel.uiState.value.isSessionActive, "Wake lock off initially")
+
+            viewModel.onToggleSession()
+            assertTrue(viewModel.uiState.value.isSessionActive, "Wake lock on when session active")
+
+            viewModel.onToggleSession()
+            assertFalse(viewModel.uiState.value.isSessionActive, "Wake lock off when session stopped")
+        }
+
+        @Test
         fun `controls are visible by default`() {
             val viewModel = createViewModel()
             assertTrue(viewModel.uiState.value.areControlsVisible)
@@ -251,6 +269,46 @@ class TracingViewModelTest {
             viewModel.onOverlayRotate(-5f)
             assertEquals(10f, viewModel.uiState.value.overlayRotation, 0.001f)
         }
+
+        @Test
+        fun `onOverlayGesture applies drag scale and rotate simultaneously`() {
+            val viewModel = createViewModel()
+            // Centroid at view center — no offset correction needed for scale
+            val centroid = Offset(540f, 960f) // default view center (1080x1920)
+            viewModel.onOverlayGesture(centroid, Offset(30f, 20f), 1.5f, 10f)
+            assertEquals(30f, viewModel.uiState.value.overlayOffset.x, 0.1f)
+            assertEquals(20f, viewModel.uiState.value.overlayOffset.y, 0.1f)
+            assertEquals(1.5f, viewModel.uiState.value.overlayScale, 0.001f)
+            assertEquals(10f, viewModel.uiState.value.overlayRotation, 0.001f)
+        }
+
+        @Test
+        fun `onOverlayGesture with off-center centroid adjusts offset for scale pivot`() {
+            val viewModel = createViewModel()
+            // Centroid at (340, 460) — offset from view center (540, 960) by (-200, -500)
+            val centroid = Offset(340f, 460f)
+            val zoom = 2f
+            // Offset correction: (1 - 2) * (340-540, 460-960) = (-1)*(-200,-500) = (200, 500)
+            viewModel.onOverlayGesture(centroid, Offset.Zero, zoom, 0f)
+            assertEquals(200f, viewModel.uiState.value.overlayOffset.x, 0.1f)
+            assertEquals(500f, viewModel.uiState.value.overlayOffset.y, 0.1f)
+            assertEquals(2f, viewModel.uiState.value.overlayScale, 0.001f)
+        }
+
+        @Test
+        fun `onOverlayGesture accumulates across multiple calls`() {
+            val viewModel = createViewModel()
+            val center = Offset(540f, 960f)
+            viewModel.onOverlayGesture(center, Offset(10f, 5f), 2f, 15f)
+            viewModel.onOverlayGesture(center, Offset(20f, 10f), 0.5f, -5f)
+            // Offset: 10+20=30, 5+10=15
+            assertEquals(30f, viewModel.uiState.value.overlayOffset.x, 0.1f)
+            assertEquals(15f, viewModel.uiState.value.overlayOffset.y, 0.1f)
+            // Scale: 2 * 0.5 = 1
+            assertEquals(1f, viewModel.uiState.value.overlayScale, 0.001f)
+            // Rotation: 15 + (-5) = 10
+            assertEquals(10f, viewModel.uiState.value.overlayRotation, 0.001f)
+        }
     }
 
     @Nested
@@ -287,6 +345,30 @@ class TracingViewModelTest {
             viewModel.onToggleInvertedMode()
             viewModel.onToggleInvertedMode()
             assertFalse(viewModel.uiState.value.isInvertedMode)
+        }
+
+        @Test
+        fun `effectiveOpacity equals overlayOpacity when inverted mode off`() {
+            val state = TracingUiState(overlayOpacity = 0.7f, isInvertedMode = false)
+            assertEquals(0.7f, state.effectiveOpacity, 0.001f)
+        }
+
+        @Test
+        fun `effectiveOpacity is inverted when inverted mode on`() {
+            val state = TracingUiState(overlayOpacity = 0.7f, isInvertedMode = true)
+            assertEquals(0.3f, state.effectiveOpacity, 0.001f)
+        }
+
+        @Test
+        fun `effectiveOpacity at 0 inverts to 1`() {
+            val state = TracingUiState(overlayOpacity = 0f, isInvertedMode = true)
+            assertEquals(1f, state.effectiveOpacity, 0.001f)
+        }
+
+        @Test
+        fun `effectiveOpacity at 1 inverts to 0`() {
+            val state = TracingUiState(overlayOpacity = 1f, isInvertedMode = true)
+            assertEquals(0f, state.effectiveOpacity, 0.001f)
         }
     }
 
@@ -501,6 +583,58 @@ class TracingViewModelTest {
 
             // Manual offset 100 should still be there
             assertEquals(100f, viewModel.uiState.value.overlayOffset.x, 2f)
+        }
+    }
+
+    @Nested
+    inner class LandscapeOrientation {
+        @Test
+        fun `landscape view dimensions produce correct preview scale`() {
+            val viewModel = createViewModel()
+            // Landscape view showing a landscape camera frame
+            viewModel.setViewDimensions(1920f, 1080f)
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 960f, 540f)), 5L, 1920, 1080)
+            )
+            // Marker at center of landscape frame → offset ~0
+            assertEquals(0f, viewModel.uiState.value.overlayOffset.x, 2f)
+            assertEquals(0f, viewModel.uiState.value.overlayOffset.y, 2f)
+        }
+
+        @Test
+        fun `landscape off-center marker scales correctly`() {
+            val viewModel = createViewModel()
+            viewModel.setViewDimensions(1920f, 1080f)
+            // Marker 100px right of center in landscape frame
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 1060f, 540f)), 5L, 1920, 1080)
+            )
+            // pvScale=1.0 for matching dimensions, offset = 100px
+            assertEquals(100f, viewModel.uiState.value.overlayOffset.x, 2f)
+            assertEquals(0f, viewModel.uiState.value.overlayOffset.y, 2f)
+        }
+
+        @Test
+        fun `switching from portrait to landscape recomputes correctly`() {
+            val viewModel = createViewModel()
+
+            // Start in portrait
+            viewModel.setViewDimensions(1080f, 1920f)
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 640f, 960f)), 5L, 1080, 1920)
+            )
+            val portraitOffset = viewModel.uiState.value.overlayOffset
+
+            // Switch to landscape (new frame dimensions too)
+            viewModel.setViewDimensions(1920f, 1080f)
+            viewModel.onMarkerResultReceived(
+                MarkerResult(listOf(markerWithCorners(0, 1060f, 540f)), 5L, 1920, 1080)
+            )
+            val landscapeOffset = viewModel.uiState.value.overlayOffset
+
+            // Both should show ~100px right of center, but in their respective coordinate spaces
+            assertEquals(100f, portraitOffset.x, 2f)
+            assertEquals(100f, landscapeOffset.x, 2f)
         }
     }
 
@@ -726,6 +860,250 @@ class TracingViewModelTest {
     }
 
     @Nested
+    inner class OverlayLock {
+        @Test
+        fun `initial lock state is false`() {
+            val viewModel = createViewModel()
+            assertFalse(viewModel.uiState.value.isOverlayLocked)
+        }
+
+        @Test
+        fun `initial viewport zoom is 1`() {
+            val viewModel = createViewModel()
+            assertEquals(1f, viewModel.uiState.value.viewportZoom)
+        }
+
+        @Test
+        fun `initial viewport pan is zero`() {
+            val viewModel = createViewModel()
+            assertEquals(0f, viewModel.uiState.value.viewportPanX)
+            assertEquals(0f, viewModel.uiState.value.viewportPanY)
+        }
+
+        @Test
+        fun `initial unlock confirm dialog is not shown`() {
+            val viewModel = createViewModel()
+            assertFalse(viewModel.uiState.value.showUnlockConfirmDialog)
+        }
+
+        @Test
+        fun `onToggleLock sets isOverlayLocked to true`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleLock()
+            assertTrue(viewModel.uiState.value.isOverlayLocked)
+        }
+
+        @Test
+        fun `lock freezes overlay — drag after lock does NOT change overlay offset`() {
+            val viewModel = createViewModel()
+            viewModel.onOverlayDrag(Offset(50f, 30f))
+            val offsetBefore = viewModel.uiState.value.overlayOffset
+
+            viewModel.onToggleLock()
+            viewModel.onOverlayDrag(Offset(100f, 100f))
+
+            assertEquals(offsetBefore.x, viewModel.uiState.value.overlayOffset.x, 0.001f)
+            assertEquals(offsetBefore.y, viewModel.uiState.value.overlayOffset.y, 0.001f)
+        }
+
+        @Test
+        fun `lock freezes overlay — scale after lock does NOT change overlay scale`() {
+            val viewModel = createViewModel()
+            viewModel.onOverlayScale(2f)
+            val scaleBefore = viewModel.uiState.value.overlayScale
+
+            viewModel.onToggleLock()
+            viewModel.onOverlayScale(3f)
+
+            assertEquals(scaleBefore, viewModel.uiState.value.overlayScale, 0.001f)
+        }
+
+        @Test
+        fun `lock freezes overlay — rotate after lock does NOT change overlay rotation`() {
+            val viewModel = createViewModel()
+            viewModel.onOverlayRotate(15f)
+            val rotationBefore = viewModel.uiState.value.overlayRotation
+
+            viewModel.onToggleLock()
+            viewModel.onOverlayRotate(45f)
+
+            assertEquals(rotationBefore, viewModel.uiState.value.overlayRotation, 0.001f)
+        }
+
+        @Test
+        fun `lock freezes overlay — gesture after lock does NOT change overlay state`() {
+            val viewModel = createViewModel()
+            val center = Offset(540f, 960f)
+            viewModel.onOverlayGesture(center, Offset(50f, 30f), 1.5f, 10f)
+            val stateBefore = viewModel.uiState.value
+
+            viewModel.onToggleLock()
+            viewModel.onOverlayGesture(center, Offset(100f, 100f), 2f, 20f)
+
+            assertEquals(stateBefore.overlayOffset, viewModel.uiState.value.overlayOffset)
+            assertEquals(stateBefore.overlayScale, viewModel.uiState.value.overlayScale, 0.001f)
+            assertEquals(stateBefore.overlayRotation, viewModel.uiState.value.overlayRotation, 0.001f)
+        }
+
+        @Test
+        fun `viewport zoom only changes when locked`() {
+            val viewModel = createViewModel()
+            viewModel.setViewDimensions(1080f, 1920f)
+            // Before lock — viewport zoom should stay at 1
+            viewModel.onViewportZoom(2f)
+            assertEquals(1f, viewModel.uiState.value.viewportZoom)
+
+            // After lock — viewport zoom should change
+            viewModel.onToggleLock()
+            viewModel.onViewportZoom(2f)
+            assertEquals(2f, viewModel.uiState.value.viewportZoom)
+        }
+
+        @Test
+        fun `viewport pan only changes when locked`() {
+            val viewModel = createViewModel()
+            viewModel.setViewDimensions(1080f, 1920f)
+            // Before lock — viewport pan should stay at 0
+            viewModel.onViewportPan(Offset(50f, 30f))
+            assertEquals(0f, viewModel.uiState.value.viewportPanX)
+            assertEquals(0f, viewModel.uiState.value.viewportPanY)
+
+            // After lock — viewport pan should change
+            viewModel.onToggleLock()
+            viewModel.onViewportZoom(2f) // must zoom first to have pan room
+            viewModel.onViewportPan(Offset(50f, 30f))
+            assertTrue(viewModel.uiState.value.viewportPanX != 0f || viewModel.uiState.value.viewportPanY != 0f)
+        }
+
+        @Test
+        fun `viewport zoom clamped between 1 and 5`() {
+            val viewModel = createViewModel()
+            viewModel.setViewDimensions(1080f, 1920f)
+            viewModel.onToggleLock()
+
+            viewModel.onViewportZoom(10f)
+            assertEquals(5f, viewModel.uiState.value.viewportZoom)
+
+            viewModel.onViewportZoom(0.01f) // 5 * 0.01 = 0.05 → clamped to 1
+            assertEquals(1f, viewModel.uiState.value.viewportZoom)
+        }
+
+        @Test
+        fun `unlock resets viewport to 1x zoom and zero pan`() {
+            val viewModel = createViewModel()
+            viewModel.setViewDimensions(1080f, 1920f)
+            viewModel.onToggleLock()
+            viewModel.onViewportZoom(3f)
+            viewModel.onViewportPan(Offset(50f, 30f))
+
+            viewModel.onRequestUnlock()
+            assertTrue(viewModel.uiState.value.showUnlockConfirmDialog)
+
+            viewModel.onConfirmUnlock()
+            assertFalse(viewModel.uiState.value.isOverlayLocked)
+            assertEquals(1f, viewModel.uiState.value.viewportZoom)
+            assertEquals(0f, viewModel.uiState.value.viewportPanX)
+            assertEquals(0f, viewModel.uiState.value.viewportPanY)
+            assertFalse(viewModel.uiState.value.showUnlockConfirmDialog)
+        }
+
+        @Test
+        fun `unlock requires confirmation dialog flow`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleLock()
+            assertTrue(viewModel.uiState.value.isOverlayLocked)
+
+            viewModel.onRequestUnlock()
+            assertTrue(viewModel.uiState.value.showUnlockConfirmDialog)
+            assertTrue(viewModel.uiState.value.isOverlayLocked) // still locked
+
+            viewModel.onDismissUnlockDialog()
+            assertFalse(viewModel.uiState.value.showUnlockConfirmDialog)
+            assertTrue(viewModel.uiState.value.isOverlayLocked) // still locked after dismiss
+        }
+
+        @Test
+        fun `opacity works regardless of lock state`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleLock()
+            viewModel.onOpacityChanged(0.8f)
+            assertEquals(0.8f, viewModel.uiState.value.overlayOpacity)
+        }
+
+        @Test
+        fun `color tint works regardless of lock state`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleLock()
+            viewModel.onColorTintChanged(ColorTint.RED)
+            assertEquals(ColorTint.RED, viewModel.uiState.value.colorTint)
+        }
+
+        @Test
+        fun `inverted mode works regardless of lock state`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleLock()
+            viewModel.onToggleInvertedMode()
+            assertTrue(viewModel.uiState.value.isInvertedMode)
+        }
+
+        @Test
+        fun `onToggleLock sets showLockSnackbar to true`() {
+            val viewModel = createViewModel()
+            assertFalse(viewModel.uiState.value.showLockSnackbar)
+            viewModel.onToggleLock()
+            assertTrue(viewModel.uiState.value.showLockSnackbar)
+        }
+
+        @Test
+        fun `onLockSnackbarShown resets flag`() {
+            val viewModel = createViewModel()
+            viewModel.onToggleLock()
+            assertTrue(viewModel.uiState.value.showLockSnackbar)
+            viewModel.onLockSnackbarShown()
+            assertFalse(viewModel.uiState.value.showLockSnackbar)
+        }
+
+        @Test
+        fun `session restore does NOT set showLockSnackbar`() = runTest {
+            val fakeUri = mockk<Uri>()
+            mockkStatic(Uri::class)
+            every { Uri.parse(any()) } returns fakeUri
+            every { fakeUri.toString() } returns "file:///data/ref"
+
+            val repo = FakeSessionRepository()
+            repo.save(SessionData(imageUri = "file:///data/ref", isOverlayLocked = true))
+
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+            viewModel.onResumeSessionAccepted()
+
+            assertTrue(viewModel.uiState.value.isOverlayLocked)
+            assertFalse(viewModel.uiState.value.showLockSnackbar)
+
+            unmockkStatic(Uri::class)
+        }
+
+        @Test
+        fun `zoom out re-clamps pan to new bounds`() {
+            val viewModel = createViewModel()
+            viewModel.setViewDimensions(1080f, 1920f)
+            viewModel.onToggleLock()
+
+            // Zoom to 5x and pan to max
+            viewModel.onViewportZoom(5f)
+            viewModel.onViewportPan(Offset(99999f, 99999f))
+            val maxPanAt5x = (5f - 1f) * 1080f / 2f // 2160
+            assertEquals(maxPanAt5x, viewModel.uiState.value.viewportPanX, 1f)
+
+            // Zoom out to 2x — pan should be re-clamped
+            viewModel.onViewportZoom(2f / 5f) // 5 * 0.4 = 2
+            val maxPanAt2x = (2f - 1f) * 1080f / 2f // 540
+            assertTrue(viewModel.uiState.value.viewportPanX <= maxPanAt2x + 1f,
+                "Pan should be clamped to $maxPanAt2x, got ${viewModel.uiState.value.viewportPanX}")
+        }
+    }
+
+    @Nested
     inner class SessionPersistence {
 
         @Test
@@ -935,6 +1313,86 @@ class TracingViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
             assertFalse(viewModel.uiState.value.isSessionActive)
             assertTrue(repo.saveCount >= 2)
+        }
+
+        @Test
+        fun `saveSession persists lock and viewport state`() = runTest {
+            val repo = FakeSessionRepository()
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+            viewModel.setViewDimensions(1080f, 1920f)
+
+            viewModel.onToggleLock()
+            viewModel.onViewportZoom(3f)
+            viewModel.onViewportPan(Offset(50f, 30f))
+            viewModel.saveSession()
+
+            val saved = repo.lastSavedData()
+            assertTrue(saved.isOverlayLocked)
+            assertEquals(3f, saved.viewportZoom, 0.01f)
+            assertTrue(saved.viewportPanX != 0f || saved.viewportPanY != 0f)
+        }
+
+        @Test
+        fun `viewport zoom triggers debounced save`() = runTest {
+            val repo = FakeSessionRepository()
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+            viewModel.setViewDimensions(1080f, 1920f)
+            viewModel.onToggleLock()
+            testDispatcher.scheduler.advanceUntilIdle()
+            val countBefore = repo.saveCount
+
+            viewModel.onViewportZoom(2f)
+            viewModel.onViewportPan(Offset(30f, 20f))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertTrue(repo.saveCount > countBefore,
+                "Viewport gestures should trigger debounced save")
+        }
+
+        @Test
+        fun `restore session restores lock and viewport state`() = runTest {
+            val fakeUri = mockk<Uri>()
+            mockkStatic(Uri::class)
+            every { Uri.parse(any()) } returns fakeUri
+            every { fakeUri.toString() } returns "file:///data/ref"
+
+            val repo = FakeSessionRepository()
+            repo.save(
+                SessionData(
+                    imageUri = "file:///data/ref",
+                    isOverlayLocked = true,
+                    viewportZoom = 2.5f,
+                    viewportPanX = 40f,
+                    viewportPanY = 20f
+                )
+            )
+
+            val viewModel = createViewModel(sessionRepository = repo)
+            viewModel.restoreSession()
+            viewModel.onResumeSessionAccepted()
+
+            assertTrue(viewModel.uiState.value.isOverlayLocked)
+            assertEquals(2.5f, viewModel.uiState.value.viewportZoom, 0.01f)
+            assertEquals(40f, viewModel.uiState.value.viewportPanX, 0.01f)
+            assertEquals(20f, viewModel.uiState.value.viewportPanY, 0.01f)
+
+            unmockkStatic(Uri::class)
+        }
+    }
+}
+
+private class FakeFlashlightController(
+    override val hasFlashlight: Boolean = true
+) : FlashlightController {
+
+    private val _isTorchOn = MutableStateFlow(false)
+    override val isTorchOn: StateFlow<Boolean> = _isTorchOn.asStateFlow()
+
+    override fun toggleTorch() {
+        if (hasFlashlight) {
+            _isTorchOn.value = !_isTorchOn.value
         }
     }
 }

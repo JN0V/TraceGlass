@@ -10,7 +10,11 @@ data class SessionData(
     val colorTint: String = "NONE",
     val isInvertedMode: Boolean = false,
     val isSessionActive: Boolean = false,
-    val timelapseSnapshotCount: Int = 0
+    val timelapseSnapshotCount: Int = 0,
+    val isOverlayLocked: Boolean = false,
+    val viewportZoom: Float = 1f,
+    val viewportPanX: Float = 0f,
+    val viewportPanY: Float = 0f
 ) {
     val hasActiveSession: Boolean
         get() = imageUri != null
