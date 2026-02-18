@@ -5,6 +5,8 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import io.github.jn0v.traceglass.core.timelapse.CompilationResult
+import io.github.jn0v.traceglass.core.timelapse.TimelapseCompiler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -48,34 +50,42 @@ class MediaCodecCompiler : TimelapseCompiler {
             val bufferInfo = MediaCodec.BufferInfo()
             val frameDurationUs = 1_000_000L / fps
 
-            for ((i, file) in snapshotFiles.withIndex()) {
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: continue
-                val canvas = inputSurface.lockCanvas(null)
-                canvas.drawBitmap(bitmap, 0f, 0f, null)
-                inputSurface.unlockCanvasAndPost(canvas)
-                bitmap.recycle()
+            try {
+                for ((i, file) in snapshotFiles.withIndex()) {
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: continue
+                    val canvas = inputSurface.lockCanvas(null)
+                    canvas.drawColor(android.graphics.Color.BLACK)
+                    val scaleX = canvas.width.toFloat() / bitmap.width
+                    val scaleY = canvas.height.toFloat() / bitmap.height
+                    canvas.scale(scaleX, scaleY)
+                    canvas.drawBitmap(bitmap, 0f, 0f, null)
+                    inputSurface.unlockCanvasAndPost(canvas)
+                    bitmap.recycle()
 
-                drainEncoder(codec, bufferInfo, muxer, trackIndex, muxerStarted) { track, started ->
+                    drainEncoder(codec, bufferInfo, muxer, trackIndex, muxerStarted,
+                        presentationTimeUs = i.toLong() * frameDurationUs) { track, started ->
+                        trackIndex = track
+                        muxerStarted = started
+                    }
+
+                    onProgress((i + 1).toFloat() / snapshotFiles.size)
+                }
+
+                codec.signalEndOfInputStream()
+                drainEncoder(codec, bufferInfo, muxer, trackIndex, muxerStarted, drainAll = true,
+                    presentationTimeUs = snapshotFiles.size.toLong() * frameDurationUs) { track, started ->
                     trackIndex = track
                     muxerStarted = started
                 }
 
-                onProgress((i + 1).toFloat() / snapshotFiles.size)
+                CompilationResult.Success(outputFile)
+            } finally {
+                try { codec.stop() } catch (_: Exception) {}
+                codec.release()
+                if (muxerStarted) try { muxer.stop() } catch (_: Exception) {}
+                muxer.release()
+                inputSurface.release()
             }
-
-            codec.signalEndOfInputStream()
-            drainEncoder(codec, bufferInfo, muxer, trackIndex, muxerStarted, drainAll = true) { track, started ->
-                trackIndex = track
-                muxerStarted = started
-            }
-
-            codec.stop()
-            codec.release()
-            if (muxerStarted) muxer.stop()
-            muxer.release()
-            inputSurface.release()
-
-            CompilationResult.Success(outputFile)
         } catch (e: Exception) {
             CompilationResult.Error(e.message ?: "Unknown compilation error")
         }
@@ -88,6 +98,7 @@ class MediaCodecCompiler : TimelapseCompiler {
         trackIndex: Int,
         muxerStarted: Boolean,
         drainAll: Boolean = false,
+        presentationTimeUs: Long = 0L,
         onTrackReady: (Int, Boolean) -> Unit
     ) {
         var currentTrack = trackIndex
@@ -108,6 +119,7 @@ class MediaCodecCompiler : TimelapseCompiler {
                         bufferInfo.size = 0
                     }
                     if (bufferInfo.size > 0 && started) {
+                        bufferInfo.presentationTimeUs = presentationTimeUs
                         muxer.writeSampleData(currentTrack, outputBuffer, bufferInfo)
                     }
                     codec.releaseOutputBuffer(outputIndex, false)
@@ -120,5 +132,5 @@ class MediaCodecCompiler : TimelapseCompiler {
         }
     }
 
-    private fun align16(value: Int): Int = (value + 15) and 0x7FFFFFF0
+    private fun align16(value: Int): Int = (value + 15) and -16
 }

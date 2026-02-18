@@ -1,5 +1,6 @@
-package io.github.jn0v.traceglass.feature.timelapse
+package io.github.jn0v.traceglass.core.timelapse
 
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -46,10 +47,14 @@ class TimelapseSession(
         _snapshotCount.value = 0
     }
 
-    fun restoreFromExisting(existingCount: Int, scope: CoroutineScope) {
+    fun restoreFromExisting(existingCount: Int) {
         if (existingCount <= 0) return
         _snapshotCount.value = existingCount
         _state.value = TimelapseState.PAUSED
+    }
+
+    companion object {
+        private const val TAG = "TimelapseSession"
     }
 
     private fun startCaptureLoop(scope: CoroutineScope) {
@@ -57,8 +62,12 @@ class TimelapseSession(
         captureJob = scope.launch {
             while (true) {
                 val index = _snapshotCount.value
-                onCapture(index)
-                _snapshotCount.value = index + 1
+                try {
+                    onCapture(index)
+                    _snapshotCount.value = index + 1
+                } catch (e: Exception) {
+                    Log.w(TAG, "Snapshot capture #$index failed", e)
+                }
                 delay(intervalMs)
             }
         }

@@ -1,4 +1,4 @@
-package io.github.jn0v.traceglass.feature.timelapse
+package io.github.jn0v.traceglass.core.timelapse
 
 import java.io.File
 

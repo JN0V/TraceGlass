@@ -15,6 +15,17 @@ import io.github.jn0v.traceglass.core.overlay.TrackingStatus
 import io.github.jn0v.traceglass.core.session.SessionData
 import io.github.jn0v.traceglass.core.session.SessionRepository
 import io.github.jn0v.traceglass.core.session.SettingsRepository
+import io.github.jn0v.traceglass.core.timelapse.CompilationResult
+import io.github.jn0v.traceglass.core.timelapse.ExportResult
+import io.github.jn0v.traceglass.core.timelapse.SnapshotStorage
+import io.github.jn0v.traceglass.core.timelapse.TimelapseCompiler
+import io.github.jn0v.traceglass.core.timelapse.TimelapseSession
+import io.github.jn0v.traceglass.core.timelapse.TimelapseState
+import io.github.jn0v.traceglass.core.timelapse.VideoExporter
+import io.github.jn0v.traceglass.core.timelapse.VideoSharer
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -33,7 +44,15 @@ class TracingViewModel(
     private val transformCalculator: OverlayTransformCalculator = OverlayTransformCalculator(),
     private val trackingStateManager: TrackingStateManager = TrackingStateManager(),
     private val sessionRepository: SessionRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val snapshotStorage: SnapshotStorage? = null,
+    private val frameAnalyzer: FrameAnalyzer? = null,
+    private val timelapseCompiler: TimelapseCompiler? = null,
+    private val videoExporter: VideoExporter? = null,
+    private val videoSharer: VideoSharer? = null,
+    private val cacheDir: java.io.File? = null,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
+    private val mainDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Main
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -69,6 +88,10 @@ class TracingViewModel(
     private var cachedPvScale: Float = 1f
     private var cachedF2S: FloatArray = MatrixUtils.identity()
 
+    // Timelapse state
+    private var timelapseSession: TimelapseSession? = null
+    private var timelapseObserverJob: Job? = null
+
     init {
         flashlightController.isTorchOn
             .onEach { torchOn -> _uiState.update { it.copy(isTorchOn = torchOn) } }
@@ -87,6 +110,11 @@ class TracingViewModel(
                 }
             }
             .launchIn(viewModelScope)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        frameAnalyzer?.close()
     }
 
     fun onPermissionResult(granted: Boolean) {
@@ -239,13 +267,238 @@ class TracingViewModel(
     }
 
     fun onToggleSession() {
+        val wasActive = _uiState.value.isSessionActive
         _uiState.update { it.copy(isSessionActive = !it.isSessionActive) }
+        if (wasActive) {
+            stopTimelapse()
+        }
         restartBreakTimer()
         viewModelScope.launch { saveSession() }
     }
 
     fun onToggleControlsVisibility() {
         _uiState.update { it.copy(areControlsVisible = !it.areControlsVisible) }
+    }
+
+    fun startTimelapse() {
+        val storage = snapshotStorage ?: return
+        val analyzer = frameAnalyzer ?: return
+
+        // Resume existing paused session instead of creating a new one
+        val existing = timelapseSession
+        if (existing != null) {
+            if (_uiState.value.isTimelapsePaused) {
+                existing.resume(viewModelScope)
+            }
+            return
+        }
+
+        val session = TimelapseSession(onCapture = { index ->
+            analyzer.snapshotCallback = { bytes ->
+                storage.saveSnapshot(bytes, index)
+            }
+        })
+        timelapseSession = session
+        session.start(viewModelScope)
+        observeTimelapseState(session)
+    }
+
+    fun pauseTimelapse() {
+        val session = timelapseSession ?: return
+        session.pause()
+        frameAnalyzer?.snapshotCallback = null
+    }
+
+    fun resumeTimelapse() {
+        val session = timelapseSession ?: return
+        session.resume(viewModelScope)
+    }
+
+    fun stopTimelapse() {
+        val session = timelapseSession ?: return
+        session.stop()
+        frameAnalyzer?.snapshotCallback = null
+        timelapseObserverJob?.cancel()
+        timelapseObserverJob = null
+        timelapseSession = null
+
+        _uiState.update {
+            it.copy(
+                isTimelapseRecording = false,
+                isTimelapsePaused = false,
+                snapshotCount = 0
+            )
+        }
+
+        viewModelScope.launch(ioDispatcher) {
+            val snapshotFiles = snapshotStorage?.getSnapshotFiles() ?: emptyList()
+            if (snapshotFiles.isNotEmpty() && timelapseCompiler != null && cacheDir != null) {
+                compileTimelapse(snapshotFiles)
+            }
+        }
+    }
+
+    private fun compileTimelapse(snapshotFiles: List<java.io.File>) {
+        if (_uiState.value.isCompiling) return
+        val compiler = timelapseCompiler ?: return
+        val outputFile = java.io.File(cacheDir, "timelapse_output.mp4")
+
+        _uiState.update { it.copy(isCompiling = true, compilationProgress = 0f, compilationError = null) }
+
+        viewModelScope.launch(ioDispatcher) {
+            val result = compiler.compile(
+                snapshotFiles = snapshotFiles,
+                outputFile = outputFile,
+                fps = 10,
+                onProgress = { progress ->
+                    _uiState.update { it.copy(compilationProgress = progress) }
+                }
+            )
+            when (result) {
+                is CompilationResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isCompiling = false,
+                            compilationProgress = 1f,
+                            compiledVideoPath = result.outputFile.absolutePath,
+                            showPostCompilationDialog = true
+                        )
+                    }
+                }
+                is CompilationResult.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isCompiling = false,
+                            compilationProgress = 0f,
+                            compilationError = result.message
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun onCompilationErrorShown() {
+        _uiState.update { it.copy(compilationError = null) }
+    }
+
+    fun onCompilationCompleteShown() {
+        _uiState.update { it.copy(compiledVideoPath = null) }
+    }
+
+    fun exportTimelapse() {
+        performExport(shareAfter = false)
+    }
+
+    fun shareTimelapse() {
+        val sharer = videoSharer ?: return
+        val uri = _uiState.value.exportedVideoUri
+        if (uri != null) {
+            _uiState.update { it.copy(showPostCompilationDialog = false) }
+            sharer.shareVideo(uri)
+        } else {
+            performExport(shareAfter = true)
+        }
+    }
+
+    private fun performExport(shareAfter: Boolean) {
+        val exporter = videoExporter ?: return
+        val videoPath = _uiState.value.compiledVideoPath ?: return
+        val videoFile = java.io.File(videoPath)
+        if (!videoFile.exists()) return
+
+        val displayName = "TraceGlass_${DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(LocalDateTime.now())}.mp4"
+
+        _uiState.update { it.copy(isExporting = true, exportError = null) }
+
+        viewModelScope.launch(ioDispatcher) {
+            when (val result = exporter.exportToGallery(videoFile, displayName)) {
+                is ExportResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isExporting = false,
+                            exportedVideoUri = result.uri,
+                            exportSuccessMessage = if (!shareAfter) "Video saved to Movies/TraceGlass/" else null,
+                            showPostCompilationDialog = false
+                        )
+                    }
+                    cleanupTempFiles()
+                    if (shareAfter) {
+                        val sharer = videoSharer ?: return@launch
+                        withContext(mainDispatcher) {
+                            sharer.shareVideo(result.uri)
+                        }
+                    }
+                }
+                is ExportResult.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isExporting = false,
+                            exportError = result.message
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun discardTimelapse() {
+        if (_uiState.value.isExporting) return
+        val videoPath = _uiState.value.compiledVideoPath
+        _uiState.update {
+            it.copy(
+                compiledVideoPath = null,
+                exportedVideoUri = null,
+                showPostCompilationDialog = false
+            )
+        }
+        viewModelScope.launch(ioDispatcher) {
+            if (videoPath != null) {
+                java.io.File(videoPath).delete()
+            }
+            cleanupTempFiles()
+        }
+    }
+
+    fun onDismissPostCompilationDialog() {
+        _uiState.update { it.copy(showPostCompilationDialog = false) }
+    }
+
+    fun onExportSuccessShown() {
+        _uiState.update { it.copy(exportSuccessMessage = null) }
+    }
+
+    fun onExportErrorShown() {
+        _uiState.update { it.copy(exportError = null) }
+    }
+
+    fun onCameraErrorShown() {
+        _uiState.update { it.copy(cameraError = null) }
+    }
+
+    private fun cleanupTempFiles() {
+        snapshotStorage?.clear()
+    }
+
+    private fun observeTimelapseState(session: TimelapseSession) {
+        timelapseObserverJob?.cancel()
+        timelapseObserverJob = viewModelScope.launch {
+            launch {
+                session.state.collect { state ->
+                    _uiState.update {
+                        it.copy(
+                            isTimelapseRecording = state == TimelapseState.RECORDING,
+                            isTimelapsePaused = state == TimelapseState.PAUSED
+                        )
+                    }
+                }
+            }
+            launch {
+                session.snapshotCount.collect { count ->
+                    _uiState.update { it.copy(snapshotCount = count) }
+                }
+            }
+        }
     }
 
     suspend fun saveSession() {
@@ -264,6 +517,9 @@ class TracingViewModel(
                     colorTint = state.colorTint.name,
                     isInvertedMode = state.isInvertedMode,
                     isSessionActive = state.isSessionActive,
+                    timelapseSnapshotCount = state.snapshotCount,
+                    isTimelapseRecording = state.isTimelapseRecording,
+                    isTimelapsePaused = state.isTimelapsePaused,
                     isOverlayLocked = state.isOverlayLocked,
                     viewportZoom = state.viewportZoom,
                     viewportPanX = state.viewportPanX,
@@ -304,6 +560,7 @@ class TracingViewModel(
                 overlayOpacity = data.overlayOpacity,
                 colorTint = ColorTint.entries.find { t -> t.name == data.colorTint } ?: ColorTint.NONE,
                 isInvertedMode = data.isInvertedMode,
+                isSessionActive = data.isSessionActive,
                 isOverlayLocked = data.isOverlayLocked,
                 viewportZoom = data.viewportZoom,
                 viewportPanX = data.viewportPanX,
@@ -313,6 +570,8 @@ class TracingViewModel(
         pendingRestoreData = null
         restoreCompleted = true
         updateOverlayFromCombined()
+        restartBreakTimer()
+        restoreTimelapseState(data)
     }
 
     fun onResumeSessionDeclined() {
@@ -320,7 +579,70 @@ class TracingViewModel(
         restoreCompleted = true
         _uiState.update { it.copy(showResumeSessionDialog = false) }
         resetTracking()
-        viewModelScope.launch { sessionRepository.clear() }
+        viewModelScope.launch {
+            sessionRepository.clear()
+            cleanupTempFiles()
+        }
+    }
+
+    private fun restoreTimelapseState(data: SessionData) {
+        if (!data.isTimelapseRecording && !data.isTimelapsePaused) return
+        val storage = snapshotStorage ?: return
+        frameAnalyzer ?: return
+
+        viewModelScope.launch(ioDispatcher) {
+            val diskCount = storage.getSnapshotCount()
+            if (diskCount <= 0) return@launch
+
+            pendingTimelapseResumeRecording = data.isTimelapseRecording
+            _uiState.update {
+                it.copy(
+                    showTimelapseRestoreDialog = true,
+                    pendingTimelapseSnapshotCount = diskCount
+                )
+            }
+        }
+    }
+
+    private var pendingTimelapseResumeRecording = false
+
+    fun onTimelapseRestoreContinue() {
+        val storage = snapshotStorage ?: return
+        val analyzer = frameAnalyzer ?: return
+        val diskCount = _uiState.value.pendingTimelapseSnapshotCount
+
+        _uiState.update { it.copy(showTimelapseRestoreDialog = false, pendingTimelapseSnapshotCount = 0) }
+
+        val session = TimelapseSession(onCapture = { index ->
+            analyzer.snapshotCallback = { bytes ->
+                storage.saveSnapshot(bytes, index)
+            }
+        })
+        timelapseSession = session
+        session.restoreFromExisting(diskCount)
+        observeTimelapseState(session)
+
+        if (pendingTimelapseResumeRecording) {
+            session.resume(viewModelScope)
+        }
+    }
+
+    fun onTimelapseRestoreCompile() {
+        _uiState.update { it.copy(showTimelapseRestoreDialog = false, pendingTimelapseSnapshotCount = 0) }
+
+        viewModelScope.launch(ioDispatcher) {
+            val snapshotFiles = snapshotStorage?.getSnapshotFiles() ?: emptyList()
+            if (snapshotFiles.isNotEmpty() && timelapseCompiler != null && cacheDir != null) {
+                compileTimelapse(snapshotFiles)
+            }
+        }
+    }
+
+    fun onTimelapseRestoreDiscard() {
+        _uiState.update { it.copy(showTimelapseRestoreDialog = false, pendingTimelapseSnapshotCount = 0) }
+        viewModelScope.launch(ioDispatcher) {
+            cleanupTempFiles()
+        }
     }
 
     private fun resetTracking() {

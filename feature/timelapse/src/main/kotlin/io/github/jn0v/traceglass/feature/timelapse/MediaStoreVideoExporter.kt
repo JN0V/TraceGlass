@@ -5,6 +5,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
+import io.github.jn0v.traceglass.core.timelapse.ExportResult
+import io.github.jn0v.traceglass.core.timelapse.VideoExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

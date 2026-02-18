@@ -4,9 +4,12 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +35,7 @@ fun TracingScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // Collect render matrix as a separate State — read only in draw phase to avoid recomposition
     val renderMatrixState = viewModel.renderMatrix.collectAsStateWithLifecycle()
+    val cameraError by cameraManager.cameraError.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -71,6 +75,29 @@ fun TracingScreen(
             val internalUri = ImageFileHelper.copyImageToInternal(context, it)
             viewModel.onImageSelected(internalUri ?: it)
         }
+    }
+
+    if (uiState.showTimelapseRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.onTimelapseRestoreDiscard() },
+            title = { Text("Timelapse snapshots found") },
+            text = { Text("${uiState.pendingTimelapseSnapshotCount} snapshots from your previous session were found. What would you like to do?") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.onTimelapseRestoreContinue() }) {
+                    Text("Continue Recording")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { viewModel.onTimelapseRestoreDiscard() }) {
+                        Text("Discard")
+                    }
+                    TextButton(onClick = { viewModel.onTimelapseRestoreCompile() }) {
+                        Text("Compile Now")
+                    }
+                }
+            }
+        )
     }
 
     if (uiState.showResumeSessionDialog) {
@@ -143,7 +170,32 @@ fun TracingScreen(
                 onViewportZoom = viewModel::onViewportZoom,
                 onViewportPan = viewModel::onViewportPan,
                 showLockSnackbar = uiState.showLockSnackbar,
-                onLockSnackbarShown = viewModel::onLockSnackbarShown
+                onLockSnackbarShown = viewModel::onLockSnackbarShown,
+                isTimelapseRecording = uiState.isTimelapseRecording,
+                isTimelapsePaused = uiState.isTimelapsePaused,
+                snapshotCount = uiState.snapshotCount,
+                onStartTimelapse = viewModel::startTimelapse,
+                onPauseTimelapse = viewModel::pauseTimelapse,
+                onResumeTimelapse = viewModel::resumeTimelapse,
+                onStopTimelapse = viewModel::stopTimelapse,
+                isCompiling = uiState.isCompiling,
+                compilationProgress = uiState.compilationProgress,
+                compiledVideoPath = uiState.compiledVideoPath,
+                compilationError = uiState.compilationError,
+                onCompilationErrorShown = viewModel::onCompilationErrorShown,
+                onCompilationCompleteShown = viewModel::onCompilationCompleteShown,
+                showPostCompilationDialog = uiState.showPostCompilationDialog,
+                isExporting = uiState.isExporting,
+                exportSuccessMessage = uiState.exportSuccessMessage,
+                exportError = uiState.exportError,
+                onExportToGallery = viewModel::exportTimelapse,
+                onShare = viewModel::shareTimelapse,
+                onDiscard = viewModel::discardTimelapse,
+                onDismissPostCompilationDialog = viewModel::onDismissPostCompilationDialog,
+                onExportSuccessShown = viewModel::onExportSuccessShown,
+                onExportErrorShown = viewModel::onExportErrorShown,
+                cameraError = cameraError,
+                onCameraErrorShown = viewModel::onCameraErrorShown
             )
         }
 

@@ -17,6 +17,9 @@ object ImageFileHelper {
                 mimeType?.contains("webp") == true -> ".webp"
                 else -> ".jpg"
             }
+            // Delete any previous reference images to avoid stale files
+            context.filesDir.listFiles { f -> f.name.startsWith("reference_image") }
+                ?.forEach { it.delete() }
             val file = File(context.filesDir, "reference_image$extension")
             file.outputStream().use { output -> input.use { it.copyTo(output) } }
             Uri.fromFile(file)

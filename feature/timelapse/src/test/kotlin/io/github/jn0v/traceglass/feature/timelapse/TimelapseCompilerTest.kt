@@ -1,5 +1,6 @@
 package io.github.jn0v.traceglass.feature.timelapse
 
+import io.github.jn0v.traceglass.core.timelapse.CompilationResult
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

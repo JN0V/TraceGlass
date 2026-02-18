@@ -26,6 +26,8 @@ class DataStoreSessionRepository(
             isInvertedMode = prefs[KEY_INVERTED] ?: false,
             isSessionActive = prefs[KEY_SESSION_ACTIVE] ?: false,
             timelapseSnapshotCount = prefs[KEY_TIMELAPSE_COUNT] ?: 0,
+            isTimelapseRecording = prefs[KEY_TIMELAPSE_RECORDING] ?: false,
+            isTimelapsePaused = prefs[KEY_TIMELAPSE_PAUSED] ?: false,
             isOverlayLocked = prefs[KEY_OVERLAY_LOCKED] ?: false,
             viewportZoom = prefs[KEY_VIEWPORT_ZOOM] ?: 1f,
             viewportPanX = prefs[KEY_VIEWPORT_PAN_X] ?: 0f,
@@ -49,6 +51,8 @@ class DataStoreSessionRepository(
             prefs[KEY_INVERTED] = data.isInvertedMode
             prefs[KEY_SESSION_ACTIVE] = data.isSessionActive
             prefs[KEY_TIMELAPSE_COUNT] = data.timelapseSnapshotCount
+            prefs[KEY_TIMELAPSE_RECORDING] = data.isTimelapseRecording
+            prefs[KEY_TIMELAPSE_PAUSED] = data.isTimelapsePaused
             prefs[KEY_OVERLAY_LOCKED] = data.isOverlayLocked
             prefs[KEY_VIEWPORT_ZOOM] = data.viewportZoom
             prefs[KEY_VIEWPORT_PAN_X] = data.viewportPanX
@@ -71,6 +75,8 @@ class DataStoreSessionRepository(
         private val KEY_INVERTED = booleanPreferencesKey("session_inverted")
         private val KEY_SESSION_ACTIVE = booleanPreferencesKey("session_active")
         private val KEY_TIMELAPSE_COUNT = intPreferencesKey("session_timelapse_count")
+        private val KEY_TIMELAPSE_RECORDING = booleanPreferencesKey("session_timelapse_recording")
+        private val KEY_TIMELAPSE_PAUSED = booleanPreferencesKey("session_timelapse_paused")
         private val KEY_OVERLAY_LOCKED = booleanPreferencesKey("session_overlay_locked")
         private val KEY_VIEWPORT_ZOOM = floatPreferencesKey("session_viewport_zoom")
         private val KEY_VIEWPORT_PAN_X = floatPreferencesKey("session_viewport_pan_x")
