@@ -18,32 +18,33 @@ import io.github.jn0v.traceglass.feature.onboarding.SetupGuideScreen
 import io.github.jn0v.traceglass.feature.tracing.TracingScreen
 import io.github.jn0v.traceglass.feature.tracing.settings.AboutScreen
 import io.github.jn0v.traceglass.feature.tracing.settings.SettingsScreen
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import org.koin.android.ext.android.inject
+import org.koin.compose.koinInject
 
 class MainActivity : ComponentActivity() {
-
-    private val onboardingRepository: OnboardingRepository by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val onboardingDone = runBlocking { onboardingRepository.isOnboardingCompleted.first() }
-
         setContent {
             MaterialTheme {
-                TraceGlassNavigation(startOnboarding = !onboardingDone)
+                TraceGlassNavigation()
             }
         }
     }
 }
 
 @Composable
-private fun TraceGlassNavigation(startOnboarding: Boolean) {
+private fun TraceGlassNavigation() {
+    val onboardingRepository: OnboardingRepository = koinInject()
+    val onboardingCompleted by onboardingRepository.isOnboardingCompleted
+        .collectAsStateWithLifecycle(initialValue = null)
+
+    // Wait for DataStore to load — avoids runBlocking on main thread
+    val completed = onboardingCompleted ?: return
+
     val navController = rememberNavController()
-    val startDestination = if (startOnboarding) "onboarding" else "tracing"
+    val startDestination = if (completed) "tracing" else "onboarding"
 
     NavHost(navController = navController, startDestination = startDestination) {
         composable("onboarding") {

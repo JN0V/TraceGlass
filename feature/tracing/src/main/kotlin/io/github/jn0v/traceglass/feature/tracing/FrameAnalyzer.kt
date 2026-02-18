@@ -41,6 +41,8 @@ class FrameAnalyzer(
                     "time=${result.detectionTimeMs}ms")
             }
             _latestResult.value = result
+        } catch (e: Exception) {
+            Log.e(TAG, "Detection failed", e)
         } finally {
             image.close()
         }

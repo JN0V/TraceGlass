@@ -1,6 +1,8 @@
 package io.github.jn0v.traceglass.core.overlay
 
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -53,6 +55,184 @@ class HomographySolverTest {
     private fun errorPx(a: Pair<Float, Float>, b: Pair<Float, Float>): Float {
         val dx = a.first - b.first; val dy = a.second - b.second
         return sqrt(dx * dx + dy * dy)
+    }
+
+    private fun transformPoint(H: FloatArray, x: Float, y: Float): Pair<Float, Float> {
+        val w = H[6] * x + H[7] * y + H[8]
+        return Pair(
+            (H[0] * x + H[1] * y + H[2]) / w,
+            (H[3] * x + H[4] * y + H[5]) / w
+        )
+    }
+
+    @Nested
+    inner class SolveHomography {
+
+        @Test
+        fun `identity mapping returns identity-like matrix`() {
+            val pts = listOf(
+                Pair(0f, 0f), Pair(100f, 0f), Pair(100f, 100f), Pair(0f, 100f)
+            )
+            val H = HomographySolver.solveHomography(pts, pts)
+            assertNotNull(H, "Identity mapping should produce valid homography")
+            for (pt in pts) {
+                val (rx, ry) = transformPoint(H!!, pt.first, pt.second)
+                assertEquals(pt.first, rx, 0.01f, "x mismatch for ${pt.first},${pt.second}")
+                assertEquals(pt.second, ry, 0.01f, "y mismatch for ${pt.first},${pt.second}")
+            }
+        }
+
+        @Test
+        fun `pure translation maps points correctly`() {
+            val src = listOf(
+                Pair(0f, 0f), Pair(100f, 0f), Pair(100f, 100f), Pair(0f, 100f)
+            )
+            val dst = src.map { (x, y) -> Pair(x + 50f, y + 30f) }
+            val H = HomographySolver.solveHomography(src, dst)
+            assertNotNull(H)
+            for (i in src.indices) {
+                val (rx, ry) = transformPoint(H!!, src[i].first, src[i].second)
+                assertEquals(dst[i].first, rx, 0.1f, "x mismatch at point $i")
+                assertEquals(dst[i].second, ry, 0.1f, "y mismatch at point $i")
+            }
+        }
+
+        @Test
+        fun `scale mapping maps all 4 points correctly`() {
+            val src = listOf(
+                Pair(0f, 0f), Pair(200f, 0f), Pair(200f, 200f), Pair(0f, 200f)
+            )
+            val dst = src.map { (x, y) -> Pair(x * 2f, y * 2f) }
+            val H = HomographySolver.solveHomography(src, dst)
+            assertNotNull(H)
+            for (i in src.indices) {
+                val (rx, ry) = transformPoint(H!!, src[i].first, src[i].second)
+                assertEquals(dst[i].first, rx, 0.1f, "x mismatch at point $i")
+                assertEquals(dst[i].second, ry, 0.1f, "y mismatch at point $i")
+            }
+        }
+
+        @Test
+        fun `perspective trapezoid maps all 4 points correctly`() {
+            // Simulate a perspective-distorted quadrilateral (trapezoid)
+            val src = listOf(
+                Pair(0f, 0f), Pair(200f, 0f), Pair(200f, 300f), Pair(0f, 300f)
+            )
+            val dst = listOf(
+                Pair(30f, 10f), Pair(180f, 20f), Pair(210f, 290f), Pair(-10f, 280f)
+            )
+            val H = HomographySolver.solveHomography(src, dst)
+            assertNotNull(H)
+            for (i in src.indices) {
+                val (rx, ry) = transformPoint(H!!, src[i].first, src[i].second)
+                assertEquals(dst[i].first, rx, 0.5f, "x mismatch at point $i")
+                assertEquals(dst[i].second, ry, 0.5f, "y mismatch at point $i")
+            }
+        }
+
+        @Test
+        fun `maps interior points correctly after perspective warp`() {
+            val src = listOf(
+                Pair(0f, 0f), Pair(100f, 0f), Pair(100f, 100f), Pair(0f, 100f)
+            )
+            val dst = listOf(
+                Pair(10f, 10f), Pair(90f, 15f), Pair(95f, 85f), Pair(5f, 90f)
+            )
+            val H = HomographySolver.solveHomography(src, dst)
+            assertNotNull(H)
+            // Center of src (50,50) should map to somewhere inside the dst quadrilateral
+            val (cx, cy) = transformPoint(H!!, 50f, 50f)
+            assertTrue(cx in 0f..100f, "center x=$cx should be inside dst quad")
+            assertTrue(cy in 0f..100f, "center y=$cy should be inside dst quad")
+        }
+
+        @Test
+        fun `returns null for wrong number of points`() {
+            val pts3 = listOf(Pair(0f, 0f), Pair(1f, 0f), Pair(1f, 1f))
+            assertNull(HomographySolver.solveHomography(pts3, pts3))
+        }
+
+        @Test
+        fun `returns null for collinear points`() {
+            val src = listOf(
+                Pair(0f, 0f), Pair(1f, 0f), Pair(2f, 0f), Pair(3f, 0f)
+            )
+            val dst = listOf(
+                Pair(0f, 0f), Pair(1f, 0f), Pair(2f, 0f), Pair(3f, 0f)
+            )
+            val H = HomographySolver.solveHomography(src, dst)
+            // Should return null due to degenerate/singular system
+            assertNull(H, "Collinear points should produce null homography")
+        }
+    }
+
+    @Nested
+    inner class SolveAffine {
+
+        @Test
+        fun `identity mapping returns identity-like matrix`() {
+            val pts = listOf(Pair(0f, 0f), Pair(100f, 0f), Pair(50f, 100f))
+            val H = HomographySolver.solveAffine(pts, pts)
+            assertNotNull(H)
+            assertEquals(9, H!!.size)
+            for (pt in pts) {
+                val (rx, ry) = transformPoint(H, pt.first, pt.second)
+                assertEquals(pt.first, rx, 0.01f)
+                assertEquals(pt.second, ry, 0.01f)
+            }
+        }
+
+        @Test
+        fun `pure translation maps 3 points correctly`() {
+            val src = listOf(Pair(10f, 20f), Pair(110f, 20f), Pair(60f, 120f))
+            val dst = src.map { (x, y) -> Pair(x + 40f, y - 15f) }
+            val H = HomographySolver.solveAffine(src, dst)
+            assertNotNull(H)
+            for (i in src.indices) {
+                val (rx, ry) = transformPoint(H!!, src[i].first, src[i].second)
+                assertEquals(dst[i].first, rx, 0.1f, "point $i x")
+                assertEquals(dst[i].second, ry, 0.1f, "point $i y")
+            }
+        }
+
+        @Test
+        fun `scale and translate combined`() {
+            val src = listOf(Pair(0f, 0f), Pair(100f, 0f), Pair(0f, 100f))
+            // scale 2x then translate (50, 50)
+            val dst = src.map { (x, y) -> Pair(x * 2f + 50f, y * 2f + 50f) }
+            val H = HomographySolver.solveAffine(src, dst)
+            assertNotNull(H)
+            for (i in src.indices) {
+                val (rx, ry) = transformPoint(H!!, src[i].first, src[i].second)
+                assertEquals(dst[i].first, rx, 0.1f, "point $i x")
+                assertEquals(dst[i].second, ry, 0.1f, "point $i y")
+            }
+        }
+
+        @Test
+        fun `last row is 0 0 1 for affine matrix`() {
+            val src = listOf(Pair(0f, 0f), Pair(100f, 0f), Pair(50f, 80f))
+            val dst = listOf(Pair(10f, 10f), Pair(90f, 20f), Pair(55f, 95f))
+            val H = HomographySolver.solveAffine(src, dst)
+            assertNotNull(H)
+            assertEquals(0f, H!![6], 1e-6f, "h[6] should be 0")
+            assertEquals(0f, H[7], 1e-6f, "h[7] should be 0")
+            assertEquals(1f, H[8], 1e-6f, "h[8] should be 1")
+        }
+
+        @Test
+        fun `returns null for wrong number of points`() {
+            val pts4 = listOf(Pair(0f, 0f), Pair(1f, 0f), Pair(1f, 1f), Pair(0f, 1f))
+            assertNull(HomographySolver.solveAffine(pts4, pts4))
+        }
+
+        @Test
+        fun `returns null for collinear points`() {
+            val src = listOf(Pair(0f, 0f), Pair(50f, 0f), Pair(100f, 0f))
+            val dst = listOf(Pair(0f, 0f), Pair(50f, 0f), Pair(100f, 0f))
+            val H = HomographySolver.solveAffine(src, dst)
+            assertNull(H, "Collinear points should produce null affine")
+        }
     }
 
     @Nested

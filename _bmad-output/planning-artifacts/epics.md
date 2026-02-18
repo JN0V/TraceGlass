@@ -882,42 +882,104 @@ So that I can identify TraceGlass on my home screen and know its version and lic
 
 Enhanced tracking features that improve overlay accuracy beyond simple translation, scale, and rotation.
 
-### Story 8.1: Perspective Correction via 4-Marker Homography
+### Story 8.1: Homography Solver & Perspective Rendering Infrastructure
 
-As a user,
-I want the overlay image to automatically compensate for the angle between my phone and the drawing surface,
-So that the projected image lines up accurately with my paper even when my phone isn't perfectly parallel.
-
-**Context:** Perspective correction requires all 4 ArUco markers (one per corner of the paper). During the initial calibration frame (all 4 markers visible), the system estimates the camera's focal length from the known rectangular paper geometry using the homography orthogonality constraint. When 3 markers are visible, the system uses the calibrated focal length and known paper rectangle to solve a constrained homography, projecting the hidden 4th corner with sub-5px accuracy even at 20° tilt.
+As a developer,
+I want a pure Kotlin homography solver and a perspective-aware overlay rendering pipeline,
+So that the overlay image can be warped onto the paper quadrilateral detected by markers instead of using a simple affine transform.
 
 **Acceptance Criteria:**
 
-**Given** 4 markers are detected and the phone is perfectly parallel to the surface
+**Given** 4 paper corner markers are detected
 **When** the overlay is displayed
-**Then** the overlay renders identically to the current behavior (no regression)
+**Then** a homography maps the overlay view rect onto the detected paper quadrilateral in screen space
 
-**Given** 4 markers are detected and the phone is tilted relative to the surface
+**Given** fewer than 4 paper corners are known
 **When** the overlay is displayed
-**Then** the system extracts the camera focal length from the initial calibration homography
-**And** the overlay is warped with a perspective correction so that its projection on the paper matches the reference image geometry
+**Then** the system falls back to affine rendering (translation + scale + rotation)
 
-**Given** 3 markers are visible and the focal length was calibrated from a prior 4-marker frame
-**When** the overlay is displayed
-**Then** the hidden 4th corner is estimated via constrained homography (paper geometry + focal length)
-**And** the estimation error is < 5px at up to 20° tilt (vs ~100px with affine-only)
-
-**Given** perspective correction is active
-**When** the phone tilt changes smoothly
-**Then** the overlay correction updates smoothly without jitter (temporal smoothing)
-
-**Given** fewer than 3 markers are detected
-**When** the overlay is displayed
-**Then** perspective correction is disabled and the overlay uses the current affine/similarity transform (translation + scale + rotation only)
-
-**Given** the initial calibration frame is taken with the phone already tilted (non-rectangular reference)
-**When** the user provides the camera focal length via CameraX intrinsics or the `setFocalLength()` API
-**Then** the system rebuilds paper coordinates to correct aspect ratio distortion and enables perspective correction
+**Given** the user adjusts overlay manually while homography is active
+**When** the combined transform is computed
+**Then** manual rotation/scale are applied in view space before H, and offset is applied after H
 
 **Given** the user opens Settings
 **When** they look at the tracking section
 **Then** a toggle "Perspective correction" is available (enabled by default)
+
+### Story 8.2: Paper-Size Agnostic 4-Marker Reference System
+
+As a user,
+I want the tracking system to work with any paper size by detecting 4 ArUco markers at the paper corners,
+So that I can use any paper or surface without configuring dimensions.
+
+**Context:** Paper coordinates are inferred from the first 4-marker detection — no hardcoded A4/Letter dimensions. When the reference is captured near fronto-parallel, the system auto-estimates the camera focal length from the homography orthogonality constraint. When captured tilted, focal length must come from CameraX intrinsics (Story 8.4). Aspect ratio correction via `correctAspectRatio()` ensures the paper rectangle is accurate.
+
+**Acceptance Criteria:**
+
+**Given** 4 ArUco markers (IDs 0-3) are placed at the paper corners
+**When** all 4 are detected for the first time
+**Then** the system captures their positions as the reference geometry and infers paper AR
+
+**Given** the reference is captured near fronto-parallel (edge ratio < 8%)
+**When** the system processes subsequent frames with all 4 markers
+**Then** auto-focal-length estimation is enabled via the orthogonality constraint
+
+**Given** the focal length becomes available (auto or injected)
+**When** paper coordinates are rebuilt
+**Then** the aspect ratio is corrected using rotation column norms
+
+**Given** fewer than 4 markers are initially detected
+**When** the overlay is displayed
+**Then** the system uses affine fallback and waits for all 4 markers
+
+### Story 8.3: 3-Marker Constrained Homography
+
+As a user,
+I want the overlay to maintain perspective-correct positioning even when one marker is occluded by my hand,
+So that I can draw without worrying about blocking a corner marker.
+
+**Context:** 3 correspondences give 6 equations for 8 unknowns. The focal length provides 2 additional quadratic constraints (orthogonality + equal norm of rotation columns). Newton-Raphson on (h7, h8) from the affine starting point converges in 3-5 iterations.
+
+**Acceptance Criteria:**
+
+**Given** 3 out of 4 markers are visible and the focal length is known
+**When** the overlay is displayed
+**Then** the hidden 4th corner is estimated via constrained homography with < 5px error at 20° tilt
+
+**Given** 3 markers are visible but no focal length is available
+**When** the overlay is displayed
+**Then** the system falls back to affine delta estimation
+
+**Given** 2 markers are visible
+**When** the overlay is displayed
+**Then** similarity delta (translation + rotation + scale) is used
+
+**Given** 1 marker is visible
+**When** the overlay is displayed
+**Then** translation-only delta is used
+
+**Given** 0 markers are visible
+**When** the overlay is displayed
+**Then** the system holds last known corner positions
+
+### Story 8.4: CameraX Intrinsics Integration
+
+As a user,
+I want the camera's focal length to be automatically extracted from CameraX and fed to the perspective correction system,
+So that 3-marker tracking works reliably even when I start with my phone tilted.
+
+**Context:** CameraXManager already extracts focal lengths for camera selection. The missing piece is exposing the focal length in pixels via a StateFlow and collecting it in TracingViewModel to call `setFocalLength()`. This enables constrained homography for the tilted-first-detection scenario where auto-f estimation fails.
+
+**Acceptance Criteria:**
+
+**Given** the camera is bound via CameraX
+**When** the camera is ready
+**Then** the focal length in pixels is computed from LENS_INFO + SENSOR_INFO and passed to the transform calculator
+
+**Given** the focal length is injected
+**When** the reference was captured tilted
+**Then** 3-marker constrained homography works correctly
+
+**Given** the device does not expose focal length data
+**When** the camera is bound
+**Then** no focal length is injected and the system relies on auto-estimation or affine fallback

@@ -5,13 +5,9 @@ plugins {
 
 android {
     namespace = "io.github.jn0v.traceglass.core.cv"
-    compileSdk = 36
-    buildToolsVersion = "34.0.0"
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        minSdk = 33
-
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
@@ -33,15 +29,6 @@ android {
             version = "3.31.5"
         }
     }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 }
 
 dependencies {
@@ -55,6 +42,3 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
-}

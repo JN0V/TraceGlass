@@ -393,7 +393,7 @@ object HomographySolver {
     /**
      * General NxN Gaussian elimination with partial pivoting.
      */
-    internal fun gaussianEliminationN(A: Array<DoubleArray>, b: DoubleArray, n: Int): DoubleArray? {
+    private fun gaussianEliminationN(A: Array<DoubleArray>, b: DoubleArray, n: Int): DoubleArray? {
         val aug = Array(n) { i -> DoubleArray(n + 1).also { row ->
             for (j in 0 until n) row[j] = A[i][j]
             row[n] = b[i]

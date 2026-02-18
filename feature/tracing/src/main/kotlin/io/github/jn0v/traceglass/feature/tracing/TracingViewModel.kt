@@ -126,21 +126,99 @@ class TracingViewModel(
         debounceSave()
     }
 
+    fun onOverlayGesture(centroid: Offset, pan: Offset, zoom: Float, rotation: Float) {
+        if (_uiState.value.isOverlayLocked) return
+        manualOffset += pan
+        if (zoom != 1f) {
+            // Adjust offset so scale originates from the gesture centroid, not the view center
+            val viewCenter = Offset(viewWidth / 2f, viewHeight / 2f)
+            manualOffset += (centroid - viewCenter) * (1f - zoom)
+            manualScaleFactor *= zoom
+        }
+        if (rotation != 0f) {
+            manualRotation += rotation
+        }
+        updateOverlayFromCombined()
+        debounceSave()
+    }
+
     fun onOverlayDrag(delta: Offset) {
+        if (_uiState.value.isOverlayLocked) return
         manualOffset += delta
         updateOverlayFromCombined()
         debounceSave()
     }
 
     fun onOverlayScale(scaleFactor: Float) {
+        if (_uiState.value.isOverlayLocked) return
         manualScaleFactor *= scaleFactor
         updateOverlayFromCombined()
         debounceSave()
     }
 
     fun onOverlayRotate(angleDelta: Float) {
+        if (_uiState.value.isOverlayLocked) return
         manualRotation += angleDelta
         updateOverlayFromCombined()
+        debounceSave()
+    }
+
+    fun onToggleLock() {
+        _uiState.update { it.copy(isOverlayLocked = true, showLockSnackbar = true) }
+        debounceSave()
+    }
+
+    fun onLockSnackbarShown() {
+        _uiState.update { it.copy(showLockSnackbar = false) }
+    }
+
+    fun onRequestUnlock() {
+        _uiState.update { it.copy(showUnlockConfirmDialog = true) }
+    }
+
+    fun onConfirmUnlock() {
+        _uiState.update {
+            it.copy(
+                isOverlayLocked = false,
+                viewportZoom = 1f,
+                viewportPanX = 0f,
+                viewportPanY = 0f,
+                showUnlockConfirmDialog = false
+            )
+        }
+        debounceSave()
+    }
+
+    fun onDismissUnlockDialog() {
+        _uiState.update { it.copy(showUnlockConfirmDialog = false) }
+    }
+
+    fun onViewportZoom(zoomFactor: Float) {
+        if (!_uiState.value.isOverlayLocked) return
+        _uiState.update {
+            val newZoom = (it.viewportZoom * zoomFactor).coerceIn(1f, 5f)
+            val maxPanX = (newZoom - 1f) * viewWidth / 2f
+            val maxPanY = (newZoom - 1f) * viewHeight / 2f
+            it.copy(
+                viewportZoom = newZoom,
+                viewportPanX = it.viewportPanX.coerceIn(-maxPanX, maxPanX),
+                viewportPanY = it.viewportPanY.coerceIn(-maxPanY, maxPanY)
+            )
+        }
+        debounceSave()
+    }
+
+    fun onViewportPan(delta: Offset) {
+        if (!_uiState.value.isOverlayLocked) return
+        val state = _uiState.value
+        val maxPanX = (state.viewportZoom - 1f) * viewWidth / 2f
+        val maxPanY = (state.viewportZoom - 1f) * viewHeight / 2f
+        _uiState.update {
+            it.copy(
+                viewportPanX = (it.viewportPanX + delta.x).coerceIn(-maxPanX, maxPanX),
+                viewportPanY = (it.viewportPanY + delta.y).coerceIn(-maxPanY, maxPanY)
+            )
+        }
         debounceSave()
     }
 
@@ -187,7 +265,11 @@ class TracingViewModel(
                     overlayOpacity = state.overlayOpacity,
                     colorTint = state.colorTint.name,
                     isInvertedMode = state.isInvertedMode,
-                    isSessionActive = state.isSessionActive
+                    isSessionActive = state.isSessionActive,
+                    isOverlayLocked = state.isOverlayLocked,
+                    viewportZoom = state.viewportZoom,
+                    viewportPanX = state.viewportPanX,
+                    viewportPanY = state.viewportPanY
                 )
             )
 
@@ -230,7 +312,11 @@ class TracingViewModel(
                 overlayImageUri = imageUri,
                 overlayOpacity = data.overlayOpacity,
                 colorTint = ColorTint.entries.find { t -> t.name == data.colorTint } ?: ColorTint.NONE,
-                isInvertedMode = data.isInvertedMode
+                isInvertedMode = data.isInvertedMode,
+                isOverlayLocked = data.isOverlayLocked,
+                viewportZoom = data.viewportZoom,
+                viewportPanX = data.viewportPanX,
+                viewportPanY = data.viewportPanY
             )
         }
         pendingRestoreData = null

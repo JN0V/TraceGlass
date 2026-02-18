@@ -73,11 +73,26 @@ For detailed planning documents, see:
 
 - [x] **Epic 1** — Project foundation, CI, camera feed, flashlight
 - [x] **Epic 2** — Image overlay, opacity, visual modes, gestures, sessions
-- [ ] **Epic 3** — Fiducial marker tracking (OpenCV)
+- [x] **Epic 3** — Fiducial marker tracking (OpenCV)
 - [ ] **Epic 4** — Time-lapse capture & sharing
-- [ ] **Epic 5** — Session persistence
+- [x] **Epic 5** — Session persistence
 - [ ] **Epic 6** — Onboarding & setup guides
-- [ ] **Epic 7** — Settings & comfort features
+- [x] **Epic 7** — Settings & comfort features
+- [ ] **Epic 8** — Advanced tracking & perspective correction
+
+## Branch Protection
+
+To ensure CI must pass before merging to `main`:
+
+1. Go to **Settings → Branches** in your GitHub repository
+2. Click **Add branch protection rule**
+3. Set **Branch name pattern** to `main`
+4. Enable **Require status checks to pass before merging**
+5. Search and select the **build** status check (from the CI workflow)
+6. Optionally enable **Require branches to be up to date before merging**
+7. Click **Create** / **Save changes**
+
+Once configured, pull requests targeting `main` cannot be merged unless the CI workflow passes.
 
 ## License
 

@@ -7,6 +7,7 @@ import android.util.Log
 import android.util.Size
 import java.util.concurrent.Executors
 import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+@androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
 class CameraXManager(private val context: Context) : CameraManager, FlashlightController {
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -93,11 +95,21 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
     }
 
     override fun toggleTorch() {
-        val cam = camera ?: return
+        val cam = camera ?: run {
+            Log.w(TAG, "toggleTorch called but camera not yet bound")
+            return
+        }
         if (!cam.cameraInfo.hasFlashUnit()) return
         val newState = !_isTorchOn.value
-        cam.cameraControl.enableTorch(newState)
-        _isTorchOn.value = newState
+        val future = cam.cameraControl.enableTorch(newState)
+        future.addListener({
+            try {
+                future.get()
+                _isTorchOn.value = newState
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to toggle torch", e)
+            }
+        }, ContextCompat.getMainExecutor(context))
     }
 
     /**
@@ -157,7 +169,7 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
             val sensorSize = cam2Info.getCameraCharacteristic(
                 CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE
             )
-            Log.i(TAG, "Active camera: id=${cam2Info.cameraId}, " +
+            Log.d(TAG, "Active camera: id=${cam2Info.cameraId}, " +
                 "focal=${focalLengths?.contentToString()}, " +
                 "sensor=${sensorSize?.width}x${sensorSize?.height}mm")
         } catch (e: Exception) {
@@ -172,7 +184,7 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
             val minZoom = zoomState?.minZoomRatio ?: 1f
             if (minZoom < 1f) {
                 camera.cameraControl.setZoomRatio(minZoom)
-                Log.i(TAG, "Zoom set to min=$minZoom for widest FOV")
+                Log.d(TAG, "Zoom set to min=$minZoom for widest FOV")
             }
         } catch (e: Exception) {
             Log.w(TAG, "Could not set zoom", e)

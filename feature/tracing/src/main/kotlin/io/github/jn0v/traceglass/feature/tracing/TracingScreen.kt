@@ -1,92 +1,26 @@
 package io.github.jn0v.traceglass.feature.tracing
 
 import android.Manifest
-import android.net.Uri
-import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.view.PreviewView
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.FlashlightOn
-import androidx.compose.material.icons.filled.FlashlightOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.rememberAsyncImagePainter
 import io.github.jn0v.traceglass.core.camera.CameraManager
-import io.github.jn0v.traceglass.core.overlay.MatrixUtils
-import io.github.jn0v.traceglass.feature.tracing.components.OpacityFab
-import io.github.jn0v.traceglass.feature.tracing.components.TrackingIndicator
-import io.github.jn0v.traceglass.feature.tracing.components.VisualModeControls
-import java.io.File
 import org.koin.compose.koinInject
 import org.koin.androidx.compose.koinViewModel
-
-private fun copyImageToInternal(context: android.content.Context, sourceUri: Uri): Uri? {
-    return try {
-        val input = context.contentResolver.openInputStream(sourceUri) ?: return null
-        val file = File(context.filesDir, "reference_image")
-        file.outputStream().use { output -> input.use { it.copyTo(output) } }
-        Uri.fromFile(file)
-    } catch (_: Exception) {
-        null
-    }
-}
 
 @Composable
 fun TracingScreen(
@@ -134,7 +68,7 @@ fun TracingScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         uri?.let {
-            val internalUri = copyImageToInternal(context, it)
+            val internalUri = ImageFileHelper.copyImageToInternal(context, it)
             viewModel.onImageSelected(internalUri ?: it)
         }
     }
@@ -165,7 +99,7 @@ fun TracingScreen(
         }
 
         PermissionState.GRANTED -> {
-            CameraPreviewContent(
+            TracingContent(
                 cameraManager = cameraManager,
                 frameAnalyzer = frameAnalyzer,
                 isTorchOn = uiState.isTorchOn,
@@ -181,9 +115,7 @@ fun TracingScreen(
                 onColorTintChanged = viewModel::onColorTintChanged,
                 onToggleInvertedMode = viewModel::onToggleInvertedMode,
                 renderMatrixState = renderMatrixState,
-                onOverlayDrag = viewModel::onOverlayDrag,
-                onOverlayScale = viewModel::onOverlayScale,
-                onOverlayRotate = viewModel::onOverlayRotate,
+                onOverlayGesture = viewModel::onOverlayGesture,
                 onSetViewDimensions = viewModel::setViewDimensions,
                 isSessionActive = uiState.isSessionActive,
                 areControlsVisible = uiState.areControlsVisible,
@@ -198,7 +130,20 @@ fun TracingScreen(
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
-                }
+                },
+                isOverlayLocked = uiState.isOverlayLocked,
+                viewportZoom = uiState.viewportZoom,
+                viewportPanX = uiState.viewportPanX,
+                viewportPanY = uiState.viewportPanY,
+                showUnlockConfirmDialog = uiState.showUnlockConfirmDialog,
+                onToggleLock = viewModel::onToggleLock,
+                onRequestUnlock = viewModel::onRequestUnlock,
+                onConfirmUnlock = viewModel::onConfirmUnlock,
+                onDismissUnlockDialog = viewModel::onDismissUnlockDialog,
+                onViewportZoom = viewModel::onViewportZoom,
+                onViewportPan = viewModel::onViewportPan,
+                showLockSnackbar = uiState.showLockSnackbar,
+                onLockSnackbarShown = viewModel::onLockSnackbarShown
             )
         }
 
@@ -208,272 +153,6 @@ fun TracingScreen(
                     permissionLauncher.launch(Manifest.permission.CAMERA)
                 }
             )
-        }
-    }
-}
-
-@Composable
-private fun CameraPreviewContent(
-    cameraManager: CameraManager,
-    frameAnalyzer: FrameAnalyzer,
-    isTorchOn: Boolean,
-    hasFlashlight: Boolean,
-    onToggleTorch: () -> Unit,
-    overlayImageUri: Uri?,
-    overlayOpacity: Float,
-    isOpacitySliderVisible: Boolean,
-    onToggleOpacitySlider: () -> Unit,
-    onOpacityChanged: (Float) -> Unit,
-    colorTint: ColorTint,
-    isInvertedMode: Boolean,
-    onColorTintChanged: (ColorTint) -> Unit,
-    onToggleInvertedMode: () -> Unit,
-    renderMatrixState: State<FloatArray?>,
-    onOverlayDrag: (Offset) -> Unit,
-    onOverlayScale: (Float) -> Unit,
-    onOverlayRotate: (Float) -> Unit,
-    onSetViewDimensions: (Float, Float) -> Unit,
-    isSessionActive: Boolean,
-    areControlsVisible: Boolean,
-    onToggleSession: () -> Unit,
-    onToggleControlsVisibility: () -> Unit,
-    trackingState: TrackingState,
-    showBreakReminder: Boolean,
-    audioFeedbackEnabled: Boolean,
-    onBreakReminderDismissed: () -> Unit,
-    onNavigateToSettings: () -> Unit,
-    onPickImage: () -> Unit
-) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(showBreakReminder) {
-        if (showBreakReminder) {
-            if (audioFeedbackEnabled) {
-                AudioFeedbackPlayer(context).playBreakReminderTone()
-            }
-            snackbarHostState.showSnackbar("Time for a break!")
-            onBreakReminderDismissed()
-        }
-    }
-
-    val prevTrackingState = remember { mutableStateOf(TrackingState.INACTIVE) }
-    LaunchedEffect(trackingState) {
-        if (audioFeedbackEnabled) {
-            when {
-                prevTrackingState.value == TrackingState.TRACKING && trackingState == TrackingState.LOST ->
-                    AudioFeedbackPlayer(context).playTrackingLostTone()
-                prevTrackingState.value == TrackingState.LOST && trackingState == TrackingState.TRACKING ->
-                    AudioFeedbackPlayer(context).playTrackingGainedTone()
-            }
-        }
-        prevTrackingState.value = trackingState
-    }
-
-    DisposableEffect(overlayImageUri) {
-        val window = (context as? android.app.Activity)?.window
-        if (overlayImageUri != null) {
-            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        } else {
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-        onDispose {
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-    }
-
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .onSizeChanged { size ->
-            onSetViewDimensions(size.width.toFloat(), size.height.toFloat())
-        }
-    ) {
-        AndroidView(
-            factory = { context ->
-                PreviewView(context).also { previewView ->
-                    cameraManager.bindPreview(lifecycleOwner, previewView.surfaceProvider, frameAnalyzer)
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-
-        if (overlayImageUri != null) {
-            val effectiveOpacity = if (isInvertedMode) 1f - overlayOpacity else overlayOpacity
-            // Cache objects to avoid per-draw allocations
-            val matrixObj = remember { android.graphics.Matrix() }
-            val identityValues = remember { MatrixUtils.identity() }
-            Image(
-                painter = rememberAsyncImagePainter(model = overlayImageUri),
-                contentDescription = "Overlay reference image",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawWithContent {
-                        drawIntoCanvas { canvas ->
-                            // Read State.value here (draw phase only) — no recomposition triggered
-                            matrixObj.setValues(renderMatrixState.value ?: identityValues)
-                            canvas.nativeCanvas.save()
-                            canvas.nativeCanvas.concat(matrixObj)
-                            drawContent()
-                            canvas.nativeCanvas.restore()
-                        }
-                    }
-                    .alpha(effectiveOpacity)
-                    .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, rotation ->
-                            onOverlayDrag(pan)
-                            if (zoom != 1f) onOverlayScale(zoom)
-                            if (rotation != 0f) onOverlayRotate(rotation)
-                        }
-                    },
-                contentScale = ContentScale.Fit,
-                colorFilter = colorTint.toColorFilter()
-            )
-        }
-
-        if (areControlsVisible) {
-            if (overlayImageUri != null) {
-                OpacityFab(
-                    opacity = overlayOpacity,
-                    isSliderVisible = isOpacitySliderVisible,
-                    onToggleSlider = onToggleOpacitySlider,
-                    onOpacityChanged = onOpacityChanged,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(16.dp)
-                )
-            }
-
-            FloatingActionButton(
-                onClick = onPickImage,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(16.dp)
-                    .size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "Pick reference image"
-                )
-            }
-
-            if (overlayImageUri != null) {
-                VisualModeControls(
-                    colorTint = colorTint,
-                    isInvertedMode = isInvertedMode,
-                    onColorTintChanged = onColorTintChanged,
-                    onToggleInvertedMode = onToggleInvertedMode,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .statusBarsPadding()
-                        .padding(16.dp)
-                )
-
-                FloatingActionButton(
-                    onClick = onToggleSession,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(16.dp)
-                        .size(56.dp),
-                    containerColor = if (isSessionActive)
-                        MaterialTheme.colorScheme.error
-                    else
-                        MaterialTheme.colorScheme.primary
-                ) {
-                    Text(if (isSessionActive) "Stop" else "Start")
-                }
-            }
-
-            TrackingIndicator(
-                trackingState = trackingState,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(16.dp)
-            )
-
-            FloatingActionButton(
-                onClick = onNavigateToSettings,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(16.dp)
-                    .size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = "Settings"
-                )
-            }
-
-            if (hasFlashlight) {
-                FloatingActionButton(
-                    onClick = onToggleTorch,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .navigationBarsPadding()
-                        .padding(16.dp)
-                        .size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isTorchOn) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
-                        contentDescription = if (isTorchOn) "Turn off flashlight" else "Turn on flashlight"
-                    )
-                }
-            }
-        }
-
-        if (!areControlsVisible) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures { onToggleControlsVisibility() }
-                    }
-            )
-        }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 80.dp)
-        )
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            cameraManager.unbind()
-        }
-    }
-}
-
-@Composable
-private fun PermissionDeniedContent(onRequestPermission: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
-            Text(
-                text = "Camera permission required",
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "TraceGlass needs camera access to display your drawing surface. No images are stored or sent anywhere.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = onRequestPermission) {
-                Text("Grant Permission")
-            }
         }
     }
 }
