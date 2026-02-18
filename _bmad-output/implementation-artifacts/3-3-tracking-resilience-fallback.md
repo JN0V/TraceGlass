@@ -141,12 +141,13 @@ Claude Opus 4.6
 - Manual offset is purely additive: `overlayOffset = markerTransform.offset + manualOffset`
 - Manual scale is multiplicative: `overlayScale = markerTransform.scale * manualScaleFactor`
 - ViewModel uses `computeSmoothed()` with `previousTransform` for all frames
-- 64 total tests passing after this story (8 new TrackingStateManager + 2 new ViewModel)
+- 9 new TrackingStateManager tests + 15 new ViewModel tests (MarkerTracking, ManualAndMarkerInteraction, SmoothedTracking)
 
 ### Change Log
 
 - 2026-02-08: TrackingStateManager + ViewModel integration — commit 6afde74
 - 2026-02-09: Single-marker + manual separation fixes — commit ed196a2
+- 2026-02-18: Code review fixes — save manual-only values, monotonic clock, flicker test, resetTracking, File List correction
 
 ### File List
 
@@ -155,5 +156,7 @@ Claude Opus 4.6
 - core/overlay/src/test/kotlin/io/github/jn0v/traceglass/core/overlay/TrackingStateManagerTest.kt
 
 **Modified files:**
-- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModel.kt (TrackingStateManager integration)
+- core/overlay/src/main/kotlin/io/github/jn0v/traceglass/core/overlay/OverlayTransformCalculator.kt (lastTransform hold, computeSmoothed paper-corners fix)
+- core/overlay/src/test/kotlin/io/github/jn0v/traceglass/core/overlay/OverlayTransformCalculatorTest.kt (MarkerTransitions tests: 2→1, 0→last, round-trip, recovery)
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModel.kt (TrackingStateManager integration, manual/marker separation, resetTracking)
 - feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModelTest.kt (tracking resilience tests)

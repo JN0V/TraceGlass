@@ -10,7 +10,7 @@ enum class TrackingStatus {
 
 class TrackingStateManager(
     private val lostTimeoutMs: Long = 500L,
-    private val timeProvider: () -> Long = { System.currentTimeMillis() }
+    private val timeProvider: () -> Long = { System.nanoTime() / 1_000_000 }
 ) {
     private var lastTrackingTime: Long = 0L
     private var hasEverTracked: Boolean = false

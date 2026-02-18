@@ -41,7 +41,7 @@ So that I understand why the overlay might not be following my paper.
   - [x] 2.3 `playTrackingGainedTone()` — `ToneGenerator.TONE_DTMF_1`, 120ms duration
   - [x] 2.4 `playBreakReminderTone()` — system notification ringtone (for Story 7.2)
   - [x] 2.5 `ToneGenerator(AudioManager.STREAM_MUSIC, 80)` — plays on music stream at moderate volume
-  - [x] 2.6 `Handler.postDelayed()` releases ToneGenerator after playback + 100ms buffer
+  - [x] 2.6 Single `ToneGenerator` reused across calls, explicit `release()` on composable dispose
 - [x] Task 3: Wire audio feedback in TracingContent (AC: #4, #5, #6)
   - [x] 3.1 `LaunchedEffect(trackingState)` detects TRACKING→LOST and LOST→TRACKING transitions
   - [x] 3.2 Checks `audioFeedbackEnabled` before playing tones
@@ -78,8 +78,8 @@ Both color AND shape change — users who cannot distinguish green from amber ca
 
 - **DTMF tones** chosen over MediaPlayer for: instant playback, no file loading, small footprint
 - **STREAM_MUSIC** at volume 80 — audible but not jarring, respects system volume
-- **Delayed release:** `ToneGenerator` released via `Handler.postDelayed(durationMs + 100)` to avoid cutting off playback
-- **Thread-safe:** Uses `Handler(Looper.getMainLooper())` for scheduling
+- **Reused instance:** Single `ToneGenerator` instance, reused across calls, released explicitly via `release()`
+- **Defensive:** try-catch around ToneGenerator construction and `startTone()` for device compatibility
 
 ### State Transition → Audio Mapping
 
@@ -133,19 +133,27 @@ Claude Opus 4.6
 - DTMF tones on STREAM_MUSIC was a fix from Feb 16 (originally used STREAM_NOTIFICATION which was too quiet)
 - ToneGenerator release via Handler.postDelayed prevents resource leak
 - Break reminder tone reuses AudioFeedbackPlayer (added preemptively, wired in Story 7.2)
-- 64 total tests passing after this story (no new tests — UI component tested via instrumented tests)
+- 64 total tests passing after this story (UI component tested via instrumented tests)
+- Code review 2 (2026-02-18): 3 HIGH, 1 LOW findings fixed:
+  - H1: AudioFeedbackPlayer refactored — reuses single ToneGenerator instance instead of creating per tone
+  - H2: DisposableEffect added in TracingContent to call `audioPlayer.release()` on composable dispose
+  - H3: `semantics(mergeDescendants = true)` with contentDescription added to TrackingIndicator for TalkBack
+  - L1: try-catch around ToneGenerator construction and startTone for device compatibility
+  - C3: 5 unit tests added for AudioFeedbackPlayer (defensive behavior on JVM without Android runtime)
 
 ### Change Log
 
 - 2026-02-08: TrackingIndicator with dual encoding — commit 3db6c9b
 - 2026-02-14: DTMF audio tones wired on STREAM_MUSIC — commit b95003f
 - 2026-02-16: DTMF tone fix (delayed release) — commit a878ac5
+- 2026-02-18: Code review 2 fixes — AudioFeedbackPlayer reuse/release/try-catch, DisposableEffect cleanup, TrackingIndicator semantics, unit tests
 
 ### File List
 
 **New files:**
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/components/TrackingIndicator.kt
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/AudioFeedbackPlayer.kt
+- feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/AudioFeedbackPlayerTest.kt
 
 **Modified files:**
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingScreen.kt (indicator placement)

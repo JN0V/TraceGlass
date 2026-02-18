@@ -32,8 +32,8 @@ class TracingViewModel(
     private val flashlightController: FlashlightController,
     private val transformCalculator: OverlayTransformCalculator = OverlayTransformCalculator(),
     private val trackingStateManager: TrackingStateManager = TrackingStateManager(),
-    private val sessionRepository: SessionRepository? = null,
-    private val settingsRepository: SettingsRepository? = null
+    private val sessionRepository: SessionRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -74,8 +74,8 @@ class TracingViewModel(
             .onEach { torchOn -> _uiState.update { it.copy(isTorchOn = torchOn) } }
             .launchIn(viewModelScope)
 
-        settingsRepository?.settingsData
-            ?.onEach { data ->
+        settingsRepository.settingsData
+            .onEach { data ->
                 val intervalChanged = breakReminderIntervalMinutes != data.breakReminderIntervalMinutes
                 val enabledChanged = breakReminderEnabled != data.breakReminderEnabled
                 breakReminderEnabled = data.breakReminderEnabled
@@ -86,7 +86,7 @@ class TracingViewModel(
                     restartBreakTimer()
                 }
             }
-            ?.launchIn(viewModelScope)
+            .launchIn(viewModelScope)
     }
 
     fun onPermissionResult(granted: Boolean) {
@@ -249,19 +249,17 @@ class TracingViewModel(
     }
 
     suspend fun saveSession() {
-
         if (!restoreCompleted) return
-        val repo = sessionRepository ?: return
         val state = _uiState.value
 
         withContext(NonCancellable) {
-            repo.save(
+            sessionRepository.save(
                 SessionData(
                     imageUri = state.overlayImageUri?.toString(),
-                    overlayOffsetX = state.overlayOffset.x,
-                    overlayOffsetY = state.overlayOffset.y,
-                    overlayScale = state.overlayScale,
-                    overlayRotation = state.overlayRotation,
+                    overlayOffsetX = manualOffset.x,
+                    overlayOffsetY = manualOffset.y,
+                    overlayScale = manualScaleFactor,
+                    overlayRotation = manualRotation,
                     overlayOpacity = state.overlayOpacity,
                     colorTint = state.colorTint.name,
                     isInvertedMode = state.isInvertedMode,
@@ -272,20 +270,13 @@ class TracingViewModel(
                     viewportPanY = state.viewportPanY
                 )
             )
-
         }
     }
 
     suspend fun restoreSession() {
-
         if (restoreAttempted) return
         restoreAttempted = true
-        val repo = sessionRepository ?: run {
-
-            restoreCompleted = true
-            return
-        }
-        val data = repo.sessionData.first()
+        val data = sessionRepository.sessionData.first()
 
         if (!data.hasActiveSession) {
             restoreCompleted = true
@@ -328,7 +319,14 @@ class TracingViewModel(
         pendingRestoreData = null
         restoreCompleted = true
         _uiState.update { it.copy(showResumeSessionDialog = false) }
-        viewModelScope.launch { sessionRepository?.clear() }
+        resetTracking()
+        viewModelScope.launch { sessionRepository.clear() }
+    }
+
+    private fun resetTracking() {
+        trackingStateManager.reset()
+        transformCalculator.resetReference()
+        previousTransform = OverlayTransform.IDENTITY
     }
 
     fun onBreakReminderDismissed() {

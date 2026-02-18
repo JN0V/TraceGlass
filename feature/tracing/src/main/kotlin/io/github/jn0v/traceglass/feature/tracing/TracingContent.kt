@@ -109,6 +109,9 @@ internal fun TracingContent(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val audioPlayer = remember { AudioFeedbackPlayer(context) }
+    DisposableEffect(Unit) {
+        onDispose { audioPlayer.release() }
+    }
 
     LaunchedEffect(showBreakReminder) {
         if (showBreakReminder) {

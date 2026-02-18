@@ -118,28 +118,61 @@ Claude Opus 4.6
 - FrameAnalyzer logs every 60 frames to avoid performance overhead
 - CI caches OpenCV SDK download for faster builds
 - 42 total tests passing after this story (7 new)
+- ✅ Code review #1 (2026-02-18): Fixed 1H, 3M, 4L — ProGuard keep rules, JNI null checks, Mat copy perf, FrameAnalyzer tests, impl/ move, DetectedMarker split, .gitignore
 
 ### Change Log
 
 - 2026-02-08: Implementation complete — commit c5acccb
 - 2026-02-09: JNI constructor fix for new MarkerResult signature — commit 273ac29
 - 2026-02-10: YUV row stride fix + wide-angle camera — commit 6f08369
+- 2026-02-18: Code review #1 fixes — ProGuard JNI keep rules (H1), JNI null checks (M1), removed unnecessary Mat copy (M3), added 6 FrameAnalyzer tests (M2), moved OpenCvMarkerDetector to impl/ (L1), split DetectedMarker to own file (L2), LOGI→LOGE (L3), added .gitignore (L4)
 
 ### File List
 
 **New files:**
 - core/cv/build.gradle.kts
+- core/cv/proguard-rules.pro (H1: JNI class keep rules for R8)
+- core/cv/.gitignore (L4: exclude .cxx/ build dir)
 - core/cv/src/main/cpp/CMakeLists.txt
 - core/cv/src/main/cpp/marker_detector_jni.cpp
 - core/cv/src/main/kotlin/io/github/jn0v/traceglass/core/cv/MarkerDetector.kt
 - core/cv/src/main/kotlin/io/github/jn0v/traceglass/core/cv/MarkerResult.kt
-- core/cv/src/main/kotlin/io/github/jn0v/traceglass/core/cv/OpenCvMarkerDetector.kt
+- core/cv/src/main/kotlin/io/github/jn0v/traceglass/core/cv/DetectedMarker.kt (L2: split from MarkerResult.kt)
+- core/cv/src/main/kotlin/io/github/jn0v/traceglass/core/cv/impl/OpenCvMarkerDetector.kt (L1: moved to impl/)
 - core/cv/src/main/kotlin/io/github/jn0v/traceglass/core/cv/di/CvModule.kt
 - core/cv/src/test/kotlin/io/github/jn0v/traceglass/core/cv/FakeMarkerDetector.kt
 - core/cv/src/test/kotlin/io/github/jn0v/traceglass/core/cv/MarkerDetectorTest.kt
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/FrameAnalyzer.kt
+- feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/FrameAnalyzerTest.kt (M2: 6 new tests)
+
+**Deleted files:**
+- core/cv/src/main/kotlin/io/github/jn0v/traceglass/core/cv/OpenCvMarkerDetector.kt (L1: moved to impl/)
 
 **Modified files:**
 - .github/workflows/ci.yml (NDK/CMake install + OpenCV SDK cache)
 - app/build.gradle.kts (cvModule dependency)
 - app/src/main/kotlin/io/github/jn0v/traceglass/TraceGlassApp.kt (cvModule registration)
+- core/cv/build.gradle.kts (H1: consumerProguardFiles added)
+- core/cv/src/main/cpp/marker_detector_jni.cpp (M1: JNI null checks, M3: removed Mat copy, L3: LOGI→LOGE)
+- core/cv/src/main/kotlin/io/github/jn0v/traceglass/core/cv/di/CvModule.kt (L1: updated import for impl/)
+
+## Senior Developer Review (AI)
+
+**Review Date:** 2026-02-18
+**Reviewer Model:** Claude Opus 4.6
+**Review Outcome:** Changes Requested → All Fixed
+
+### Findings Summary
+
+**Issues Found:** 1 High, 3 Medium, 4 Low — **All resolved**
+
+### Action Items
+
+- [x] **[HIGH] H1: Missing ProGuard keep rules for JNI-referenced classes** — `MarkerResult`, `DetectedMarker`, and `OpenCvMarkerDetector` are referenced by JNI via fully-qualified class names. R8 with `isMinifyEnabled = true` would obfuscate them, causing release build crashes. **Fix:** Created `core/cv/proguard-rules.pro` with `-keep` rules, added `consumerProguardFiles` to build.gradle.kts.
+- [x] **[MED] M1: No null checks after JNI FindClass/GetMethodID** — All `FindClass()`/`GetMethodID()` calls could return null (e.g., ProGuard renaming). Code would segfault instead of giving descriptive error. **Fix:** Added `JNI_CHECK_NULL` macro that logs error and throws `RuntimeException`.
+- [x] **[MED] M2: Zero test coverage for FrameAnalyzer** — FrameAnalyzer (Task 10) shipped without any tests, violating NFR18-25 TDD requirements. **Fix:** Added 6 tests: parameter passing, StateFlow update, initial state, error handling (image close + no state corruption), multi-frame processing.
+- [x] **[MED] M3: Unnecessary Mat copy when rowStride != width** — `grayPadded.copyTo(gray)` was called when rowStride differed from width, but the Mat with rowStride as step parameter is valid for `detectMarkers()` and `cv::rotate()`. Wasted memory + latency. **Fix:** Removed conditional copy, use single `cv::Mat gray(h, w, type, buf, rowStride)`.
+- [x] **[LOW] L1: OpenCvMarkerDetector not in `impl/` subdirectory** — Architecture requires `impl/` for concrete implementations. **Fix:** Moved to `core/cv/.../impl/OpenCvMarkerDetector.kt`, updated JNI function name and CvModule import.
+- [x] **[LOW] L2: Two data classes in one file** — `MarkerResult` and `DetectedMarker` in same file violates "one public class per file" rule. **Fix:** Split `DetectedMarker` into its own file.
+- [x] **[LOW] L3: C++ JNI uses LOGI for error case** — Architecture says never use `Log.i` in production. Null buffer error used `LOGI`. **Fix:** Replaced `LOGI` with `LOGE` and `LOGD` macros.
+- [x] **[LOW] L4: Missing `core/cv/.gitignore`** — Dev Notes mention it should exist for `.cxx/` build directory. **Fix:** Created file.
