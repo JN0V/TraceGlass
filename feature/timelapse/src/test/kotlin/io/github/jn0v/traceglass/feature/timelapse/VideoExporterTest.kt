@@ -1,5 +1,7 @@
 package io.github.jn0v.traceglass.feature.timelapse
 
+import io.github.jn0v.traceglass.core.timelapse.ExportResult
+import io.github.jn0v.traceglass.core.timelapse.VideoExporter
 import android.net.Uri
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest

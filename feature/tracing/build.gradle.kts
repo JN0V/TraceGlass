@@ -21,6 +21,7 @@ dependencies {
     implementation(project(":core:cv"))
     implementation(project(":core:overlay"))
     implementation(project(":core:session"))
+    implementation(project(":core:timelapse"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

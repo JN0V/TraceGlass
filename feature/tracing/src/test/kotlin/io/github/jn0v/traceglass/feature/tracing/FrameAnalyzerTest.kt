@@ -14,6 +14,7 @@ import io.mockk.verify
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -154,6 +155,36 @@ class FrameAnalyzerTest {
             brokenAnalyzer.analyze(image)
 
             assertFalse(brokenAnalyzer.latestResult.value.isTracking)
+        }
+    }
+
+    @Nested
+    inner class SnapshotCallback {
+        @Test
+        fun `snapshotCallback is null by default`() {
+            assertNull(analyzer.snapshotCallback)
+        }
+
+        @Test
+        fun `snapshotCallback can be set and read`() {
+            val callback: (ByteArray) -> Unit = { }
+            analyzer.snapshotCallback = callback
+            assertEquals(callback, analyzer.snapshotCallback)
+        }
+
+        @Test
+        fun `snapshotCallback is cleared after analyze consumes it`() {
+            // toBitmap() requires Android runtime, so we mock it
+            // When toBitmap() throws (no Android env), the exception is caught
+            // and the callback should still be cleared because it's set to null before toBitmap
+            analyzer.snapshotCallback = { }
+            val image = createMockImageProxy()
+
+            analyzer.analyze(image)
+
+            // The callback is cleared to null before toBitmap() is called,
+            // so even if toBitmap() fails, the callback is consumed
+            assertNull(analyzer.snapshotCallback)
         }
     }
 

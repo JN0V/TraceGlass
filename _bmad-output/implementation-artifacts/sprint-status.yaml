@@ -51,7 +51,7 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Core Tracing Experience
-  epic-2: in-progress
+  epic-2: done
   2-1-image-import-via-photo-picker: done # Review follow-ups resolved: AC2 text fixed, ImageFileHelper tests added
   2-2-overlay-rendering-on-camera-feed: done # Code review #2 passed: HomographySolver tests (13), File List fixed, gaussianEliminationN private. 266 tests.
   2-3-opacity-control: done # Bug fixes complete: auto-collapse timer + vertical slider, 87 tests pass, 4 new Compose UI tests
@@ -73,10 +73,10 @@ development_status:
   # Isolated implementations + unit tests exist (40 tests pass).
   # Story files created 2026-02-17 — focus on WIRING: DI, ViewModel, FrameAnalyzer, UI.
   epic-4: in-progress
-  4-1-automatic-snapshot-capture: ready-for-dev # Story created: Koin DI module, FrameAnalyzer JPEG capture, ViewModel integration, UI controls
-  4-2-mp4-video-compilation: ready-for-dev # Story created: wire MediaCodecCompiler, trigger on stop, progress UI
-  4-3-timelapse-export-sharing: ready-for-dev # Story created: wire MediaStoreVideoExporter + VideoSharer, post-compilation UI
-  4-4-timelapse-snapshot-preservation: ready-for-dev # Story created: session save/restore lifecycle hooks, cold start recovery
+  4-1-automatic-snapshot-capture: review # Code review: 8/12 fixed (C1,H1,H2,H3,H4,M1,M2,M3), 3 deferred tech debt (C2,L1,L2)
+  4-2-mp4-video-compilation: done # Code review passed: architecture violation fixed (core:timelapse module), concurrent guard, injectable dispatchers, deprecated API fix. 8 tests.
+  4-3-timelapse-export-sharing: done # Code review passed: M1 dedup export, M2 async discard, M5 a11y, L1 DateTimeFormatter. 1 LOW deferred (L3 dialog layout). 172 tests.
+  4-4-timelapse-snapshot-preservation: done # Code review passed: H1 phantom restore guard, H2 main-thread I/O, M2 unused param, M3 stale-snapshot test. 1 MEDIUM deferred (M1 3-option dialog). 180 tests.
   epic-4-retrospective: optional
 
   # Epic 5: Session Persistence

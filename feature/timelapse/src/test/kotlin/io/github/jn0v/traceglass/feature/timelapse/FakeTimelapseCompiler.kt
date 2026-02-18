@@ -1,5 +1,7 @@
 package io.github.jn0v.traceglass.feature.timelapse
 
+import io.github.jn0v.traceglass.core.timelapse.CompilationResult
+import io.github.jn0v.traceglass.core.timelapse.TimelapseCompiler
 import java.io.File
 
 class FakeTimelapseCompiler : TimelapseCompiler {

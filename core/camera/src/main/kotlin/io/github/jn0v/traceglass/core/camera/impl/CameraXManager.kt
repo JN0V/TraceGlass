@@ -31,6 +31,12 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
     private var camera: Camera? = null
     private val analysisExecutor = Executors.newSingleThreadExecutor()
 
+    private val _isCameraReady = MutableStateFlow(false)
+    override val isCameraReady: StateFlow<Boolean> = _isCameraReady.asStateFlow()
+
+    private val _cameraError = MutableStateFlow<String?>(null)
+    override val cameraError: StateFlow<String?> = _cameraError.asStateFlow()
+
     private val _isTorchOn = MutableStateFlow(false)
     override val isTorchOn: StateFlow<Boolean> = _isTorchOn.asStateFlow()
 
@@ -44,46 +50,53 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
         imageAnalyzer: ImageAnalysis.Analyzer?
     ) {
         val future = ProcessCameraProvider.getInstance(context)
+        _cameraError.value = null
         future.addListener({
-            val provider = future.get()
+            try {
+                val provider = future.get()
 
-            val cameraSelector = buildWideAngleSelector(provider)
+                val cameraSelector = buildWideAngleSelector(provider)
 
-            val preview = Preview.Builder().build().also {
-                it.surfaceProvider = surfaceProvider
-            }
+                val preview = Preview.Builder().build().also {
+                    it.surfaceProvider = surfaceProvider
+                }
 
-            val useCases = mutableListOf<androidx.camera.core.UseCase>(preview)
+                val useCases = mutableListOf<androidx.camera.core.UseCase>(preview)
 
-            if (imageAnalyzer != null) {
-                val resolutionSelector = ResolutionSelector.Builder()
-                    .setResolutionStrategy(
-                        ResolutionStrategy(
-                            Size(1280, 720),
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
+                if (imageAnalyzer != null) {
+                    val resolutionSelector = ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            ResolutionStrategy(
+                                Size(1280, 720),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
+                            )
                         )
-                    )
-                    .build()
+                        .build()
 
-                val analysis = ImageAnalysis.Builder()
-                    .setResolutionSelector(resolutionSelector)
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-                    .also { it.setAnalyzer(analysisExecutor, imageAnalyzer) }
-                useCases.add(analysis)
+                    val analysis = ImageAnalysis.Builder()
+                        .setResolutionSelector(resolutionSelector)
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                        .also { it.setAnalyzer(analysisExecutor, imageAnalyzer) }
+                    useCases.add(analysis)
+                }
+
+                provider.unbindAll()
+                camera = provider.bindToLifecycle(
+                    lifecycleOwner,
+                    cameraSelector,
+                    *useCases.toTypedArray()
+                )
+
+                logSelectedCamera(camera)
+                setWidestZoom(camera)
+
+                cameraProvider = provider
+                _isCameraReady.value = true
+            } catch (e: Exception) {
+                Log.e(TAG, "Camera bind failed", e)
+                _cameraError.value = e.message ?: "Camera initialization failed"
             }
-
-            provider.unbindAll()
-            camera = provider.bindToLifecycle(
-                lifecycleOwner,
-                cameraSelector,
-                *useCases.toTypedArray()
-            )
-
-            logSelectedCamera(camera)
-            setWidestZoom(camera)
-
-            cameraProvider = provider
         }, ContextCompat.getMainExecutor(context))
     }
 
@@ -91,8 +104,9 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
         cameraProvider?.unbindAll()
         cameraProvider = null
         camera = null
+        _isCameraReady.value = false
         _isTorchOn.value = false
-        analysisExecutor.shutdown()
+        // Don't shutdown analysisExecutor — it's reused across bind/unbind cycles
     }
 
     override fun toggleTorch() {

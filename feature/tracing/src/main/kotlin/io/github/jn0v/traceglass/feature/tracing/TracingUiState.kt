@@ -31,7 +31,22 @@ data class TracingUiState(
     val viewportPanX: Float = 0f,
     val viewportPanY: Float = 0f,
     val showUnlockConfirmDialog: Boolean = false,
-    val showLockSnackbar: Boolean = false
+    val showLockSnackbar: Boolean = false,
+    val isTimelapseRecording: Boolean = false,
+    val isTimelapsePaused: Boolean = false,
+    val snapshotCount: Int = 0,
+    val isCompiling: Boolean = false,
+    val compilationProgress: Float = 0f,
+    val compiledVideoPath: String? = null,
+    val compilationError: String? = null,
+    val isExporting: Boolean = false,
+    val exportedVideoUri: Uri? = null,
+    val exportSuccessMessage: String? = null,
+    val exportError: String? = null,
+    val showPostCompilationDialog: Boolean = false,
+    val showTimelapseRestoreDialog: Boolean = false,
+    val pendingTimelapseSnapshotCount: Int = 0,
+    val cameraError: String? = null
 ) {
     val effectiveOpacity: Float
         get() = if (isInvertedMode) 1f - overlayOpacity else overlayOpacity

@@ -3,10 +3,11 @@ package io.github.jn0v.traceglass.feature.timelapse
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import io.github.jn0v.traceglass.core.timelapse.VideoSharer
 
-class VideoSharer(private val context: Context) {
+class IntentVideoSharer(private val context: Context) : VideoSharer {
 
-    fun shareVideo(videoUri: Uri) {
+    override fun shareVideo(videoUri: Uri) {
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "video/mp4"
             putExtra(Intent.EXTRA_STREAM, videoUri)

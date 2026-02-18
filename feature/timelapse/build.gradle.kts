@@ -8,6 +8,7 @@ android {
 }
 
 dependencies {
+    api(project(":core:timelapse"))
     implementation(project(":core:camera"))
     implementation(project(":core:session"))
 
@@ -19,5 +20,6 @@ dependencies {
     testRuntimeOnly(libs.junit5.engine)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.koin.test)
 }
 

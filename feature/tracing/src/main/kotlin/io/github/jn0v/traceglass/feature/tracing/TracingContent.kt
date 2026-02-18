@@ -1,5 +1,7 @@
 package io.github.jn0v.traceglass.feature.tracing
 
+import android.content.Context
+import android.content.ContextWrapper
 import android.net.Uri
 import android.view.WindowManager
 import androidx.camera.view.PreviewView
@@ -9,20 +11,32 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.FlashlightOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -36,7 +50,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -47,6 +63,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -103,7 +121,32 @@ internal fun TracingContent(
     onViewportZoom: (Float) -> Unit = {},
     onViewportPan: (Offset) -> Unit = {},
     showLockSnackbar: Boolean = false,
-    onLockSnackbarShown: () -> Unit = {}
+    onLockSnackbarShown: () -> Unit = {},
+    isTimelapseRecording: Boolean = false,
+    isTimelapsePaused: Boolean = false,
+    snapshotCount: Int = 0,
+    onStartTimelapse: () -> Unit = {},
+    onPauseTimelapse: () -> Unit = {},
+    onResumeTimelapse: () -> Unit = {},
+    onStopTimelapse: () -> Unit = {},
+    isCompiling: Boolean = false,
+    compilationProgress: Float = 0f,
+    compiledVideoPath: String? = null,
+    compilationError: String? = null,
+    onCompilationErrorShown: () -> Unit = {},
+    onCompilationCompleteShown: () -> Unit = {},
+    showPostCompilationDialog: Boolean = false,
+    isExporting: Boolean = false,
+    exportSuccessMessage: String? = null,
+    exportError: String? = null,
+    onExportToGallery: () -> Unit = {},
+    onShare: () -> Unit = {},
+    onDiscard: () -> Unit = {},
+    onDismissPostCompilationDialog: () -> Unit = {},
+    onExportSuccessShown: () -> Unit = {},
+    onExportErrorShown: () -> Unit = {},
+    cameraError: String? = null,
+    onCameraErrorShown: () -> Unit = {}
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
@@ -131,6 +174,34 @@ internal fun TracingContent(
         }
     }
 
+    LaunchedEffect(compilationError) {
+        if (compilationError != null) {
+            snackbarHostState.showSnackbar("Compilation failed: $compilationError")
+            onCompilationErrorShown()
+        }
+    }
+
+    LaunchedEffect(exportSuccessMessage) {
+        if (exportSuccessMessage != null) {
+            snackbarHostState.showSnackbar(exportSuccessMessage)
+            onExportSuccessShown()
+        }
+    }
+
+    LaunchedEffect(exportError) {
+        if (exportError != null) {
+            snackbarHostState.showSnackbar("Export failed: $exportError")
+            onExportErrorShown()
+        }
+    }
+
+    LaunchedEffect(cameraError) {
+        if (cameraError != null) {
+            snackbarHostState.showSnackbar("Camera error: $cameraError")
+            onCameraErrorShown()
+        }
+    }
+
     val prevTrackingState = remember { mutableStateOf(TrackingState.INACTIVE) }
     LaunchedEffect(trackingState) {
         if (audioFeedbackEnabled) {
@@ -144,8 +215,8 @@ internal fun TracingContent(
         prevTrackingState.value = trackingState
     }
 
-    DisposableEffect(isSessionActive) {
-        val window = (context as? android.app.Activity)?.window
+    val window = context.findActivity()?.window
+    DisposableEffect(isSessionActive, lifecycleOwner) {
         if (isSessionActive) {
             window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
@@ -154,6 +225,55 @@ internal fun TracingContent(
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
+    }
+
+    // Post-compilation dialog: Save to Gallery / Share / Discard
+    if (showPostCompilationDialog) {
+        AlertDialog(
+            onDismissRequest = onDismissPostCompilationDialog,
+            title = { Text("Timelapse ready!") },
+            text = {
+                if (isExporting) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .semantics { contentDescription = "Exporting video" }
+                        )
+                        Text("Saving...")
+                    }
+                } else {
+                    Text("What would you like to do with your time-lapse video?")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = onExportToGallery,
+                    enabled = !isExporting
+                ) {
+                    Text("Save to Gallery")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = onDiscard,
+                        enabled = !isExporting
+                    ) {
+                        Text("Discard")
+                    }
+                    TextButton(
+                        onClick = onShare,
+                        enabled = !isExporting
+                    ) {
+                        Text("Share")
+                    }
+                }
+            }
+        )
     }
 
     // Unlock confirmation dialog (Task 5)
@@ -307,6 +427,25 @@ internal fun TracingContent(
                     Text(if (isSessionActive) "Stop" else "Start")
                 }
 
+                // Timelapse controls — only visible when session is active
+                if (isSessionActive || isCompiling) {
+                    TimelapseControls(
+                        isRecording = isTimelapseRecording,
+                        isPaused = isTimelapsePaused,
+                        snapshotCount = snapshotCount,
+                        onStart = onStartTimelapse,
+                        onPause = onPauseTimelapse,
+                        onResume = onResumeTimelapse,
+                        onStop = onStopTimelapse,
+                        isCompiling = isCompiling,
+                        compilationProgress = compilationProgress,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .navigationBarsPadding()
+                            .padding(16.dp)
+                    )
+                }
+
                 ExpandableMenu(
                     items = buildList {
                         add(ExpandableMenuItem(
@@ -375,6 +514,109 @@ internal fun TracingContent(
     }
 }
 
+@Composable
+private fun TimelapseControls(
+    isRecording: Boolean,
+    isPaused: Boolean,
+    snapshotCount: Int,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onStop: () -> Unit,
+    isCompiling: Boolean = false,
+    compilationProgress: Float = 0f,
+    modifier: Modifier = Modifier
+) {
+    val isActive = isRecording || isPaused
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
+        tonalElevation = 4.dp
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            if (isCompiling) {
+                Text(
+                    text = "Compiling ${(compilationProgress * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+                LinearProgressIndicator(
+                    progress = { compilationProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (isActive) {
+                        // Recording indicator (red dot) or paused indicator
+                        if (isRecording) {
+                            Icon(
+                                imageVector = Icons.Filled.FiberManualRecord,
+                                contentDescription = "Recording",
+                                tint = Color.Red,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Pause,
+                                contentDescription = "Paused",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                        // Snapshot count badge
+                        Text(
+                            text = "$snapshotCount",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                        // Pause / Resume button
+                        IconButton(
+                            onClick = if (isRecording) onPause else onResume,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isRecording) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = if (isRecording) "Pause timelapse" else "Resume timelapse"
+                            )
+                        }
+                        // Stop button
+                        IconButton(
+                            onClick = onStop,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Stop,
+                                contentDescription = "Stop timelapse"
+                            )
+                        }
+                    } else {
+                        // Start recording button — disabled while compiling
+                        IconButton(
+                            onClick = onStart,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FiberManualRecord,
+                                contentDescription = "Start timelapse",
+                                tint = Color.Red
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 internal fun PermissionDeniedContent(onRequestPermission: () -> Unit = {}) {
@@ -401,4 +643,13 @@ internal fun PermissionDeniedContent(onRequestPermission: () -> Unit = {}) {
             }
         }
     }
+}
+
+private fun Context.findActivity(): android.app.Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is android.app.Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

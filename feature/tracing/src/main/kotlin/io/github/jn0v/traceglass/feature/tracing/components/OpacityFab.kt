@@ -36,7 +36,7 @@ fun OpacityFab(
     modifier: Modifier = Modifier
 ) {
     if (isSliderVisible) {
-        LaunchedEffect(opacity) {
+        LaunchedEffect(isSliderVisible, opacity) {
             delay(3000)
             onToggleSlider()
         }

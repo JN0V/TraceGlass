@@ -11,6 +11,8 @@ data class SessionData(
     val isInvertedMode: Boolean = false,
     val isSessionActive: Boolean = false,
     val timelapseSnapshotCount: Int = 0,
+    val isTimelapseRecording: Boolean = false,
+    val isTimelapsePaused: Boolean = false,
     val isOverlayLocked: Boolean = false,
     val viewportZoom: Float = 1f,
     val viewportPanX: Float = 0f,
