@@ -256,4 +256,52 @@ class MatrixUtilsTest {
             assertEquals(0f, py, eps)
         }
     }
+
+    @Nested
+    inner class RoundTrip {
+        @Test
+        fun `translate then inverse translate yields identity`() {
+            val result = MatrixUtils.compose(
+                MatrixUtils.translate(42f, -17f),
+                MatrixUtils.translate(-42f, 17f)
+            )
+            assertMatrixEquals(MatrixUtils.identity(), result)
+        }
+
+        @Test
+        fun `scale then inverse scale yields identity`() {
+            val result = MatrixUtils.compose(
+                MatrixUtils.scale(3f, 0.5f),
+                MatrixUtils.scale(1f / 3f, 2f)
+            )
+            assertMatrixEquals(MatrixUtils.identity(), result)
+        }
+
+        @Test
+        fun `rotate then inverse rotate yields identity`() {
+            val result = MatrixUtils.compose(
+                MatrixUtils.rotate(37f),
+                MatrixUtils.rotate(-37f)
+            )
+            assertMatrixEquals(MatrixUtils.identity(), result, 1e-4f)
+        }
+
+        @Test
+        fun `translate-scale-rotate round-trip preserves point`() {
+            val forward = MatrixUtils.compose(
+                MatrixUtils.translate(10f, 20f),
+                MatrixUtils.scale(2f),
+                MatrixUtils.rotate(45f)
+            )
+            val backward = MatrixUtils.compose(
+                MatrixUtils.rotate(-45f),
+                MatrixUtils.scale(0.5f),
+                MatrixUtils.translate(-10f, -20f)
+            )
+            val roundTrip = MatrixUtils.compose(forward, backward)
+            val (px, py) = transformPoint(roundTrip, 7f, 13f)
+            assertEquals(7f, px, 1e-3f)
+            assertEquals(13f, py, 1e-3f)
+        }
+    }
 }

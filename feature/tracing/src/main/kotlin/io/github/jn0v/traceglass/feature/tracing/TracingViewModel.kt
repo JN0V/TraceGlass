@@ -68,6 +68,7 @@ class TracingViewModel(
     private var breakReminderEnabled = false
     private var breakReminderIntervalMinutes = 30
     private var audioFeedbackEnabled = false
+    private var perspectiveCorrectionEnabled = true
     private var breakTimerJob: Job? = null
     private var debounceSaveJob: Job? = null
 
@@ -105,7 +106,10 @@ class TracingViewModel(
                 breakReminderEnabled = data.breakReminderEnabled
                 breakReminderIntervalMinutes = data.breakReminderIntervalMinutes
                 audioFeedbackEnabled = data.audioFeedbackEnabled
+                val perspectiveChanged = perspectiveCorrectionEnabled != data.perspectiveCorrectionEnabled
+                perspectiveCorrectionEnabled = data.perspectiveCorrectionEnabled
                 _uiState.update { it.copy(audioFeedbackEnabled = data.audioFeedbackEnabled) }
+                if (perspectiveChanged) updateOverlayFromCombined()
                 if (intervalChanged || enabledChanged) {
                     restartBreakTimer()
                 }
@@ -732,7 +736,7 @@ class TracingViewModel(
         val corners = previousTransform.paperCornersFrame
         val renderMatrix: FloatArray
 
-        if (corners != null && corners.size == 4) {
+        if (corners != null && corners.size == 4 && perspectiveCorrectionEnabled) {
             // Paper-mapping branch: map overlay view rect onto the paper quadrilateral.
             // Convert frame-space paper corners to screen space via F2S.
             val screenCorners = corners.map { (fx, fy) ->
@@ -789,7 +793,12 @@ class TracingViewModel(
             renderMatrix = computeAffineMatrix(pvScale, cx, cy)
         }
 
-        _renderMatrix.value = renderMatrix
+        // Only emit when values actually changed — StateFlow compares by reference,
+        // so a new FloatArray always triggers observers even if content is identical.
+        val prev = _renderMatrix.value
+        if (prev == null || !prev.contentEquals(renderMatrix)) {
+            _renderMatrix.value = renderMatrix
+        }
 
         _uiState.update {
             it.copy(

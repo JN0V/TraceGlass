@@ -140,12 +140,27 @@ Claude Opus 4.6
 - Settings toggle defaults to enabled
 - Original 2-marker perspectiveMatrix approach was abandoned in favor of paper-mapping via 4 corners
 
+**Adversarial review fixes (2026-02-19):**
+- CRITICAL: Implemented missing Task 5 (perspectiveCorrectionEnabled toggle in SettingsData, SettingsRepository, DataStoreSettingsRepository, SettingsViewModel, SettingsScreen) — AC #4 was unmet
+- CRITICAL: Wired perspectiveCorrectionEnabled into TracingViewModel.updateOverlayFromCombined() — falls back to affine when disabled
+- HIGH: Added 5 correctAspectRatio tests (fronto-parallel, tilted, square, wrong count, zero-area)
+- HIGH: Fixed no-op degenerate test in solveConstrainedHomography — added assertNull assertion
+- MEDIUM: Fixed renderMatrix StateFlow spurious emissions via contentEquals check before emitting
+- MEDIUM: Added corner ordering KDoc (TL,TR,BR,BL) and positive-dimensions guard to correctAspectRatio
+- MEDIUM: Added near-square paper guard in estimateFocalLength equal-norm fallback
+- MEDIUM: Documented divergence threshold 0.1 for h7/h8 in Newton-Raphson (phone-over-paper context)
+- LOW: Documented determinant sanity thresholds (0.01/100) in solveHomography and solveAffine
+- LOW: Added 4 round-trip tests to MatrixUtilsTest (translate, scale, rotate, composed transform)
+- Added 3 PerspectiveCorrection tests to SettingsViewModelTest (toggle, persist, re-enable)
+- Added i18n strings: settings_perspective_correction, settings_perspective_correction_desc
+
 ### Change Log
 
 - 2026-02-09: Story 8.1 first draft (2-marker approach)
 - 2026-02-11: Implementation complete, 2-marker approach disabled (insufficient baseline)
 - 2026-02-13: Evolved to 4-corner paper-mapping with full homography rendering
 - 2026-02-18: Story rewritten to document actual architecture
+- 2026-02-19: Adversarial review fixes — settings toggle (AC #4), test coverage, renderMatrix optimization, KDoc, guards
 
 ### File List
 
@@ -156,11 +171,19 @@ Claude Opus 4.6
 - core/overlay/src/test/kotlin/io/github/jn0v/traceglass/core/overlay/MatrixUtilsTest.kt
 
 **Modified files:**
+- core/overlay/src/main/kotlin/io/github/jn0v/traceglass/core/overlay/HomographySolver.kt
 - core/overlay/src/main/kotlin/io/github/jn0v/traceglass/core/overlay/OverlayTransform.kt
-- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModel.kt
-- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingUiState.kt
-- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingContent.kt
+- core/overlay/src/test/kotlin/io/github/jn0v/traceglass/core/overlay/HomographySolverTest.kt
+- core/overlay/src/test/kotlin/io/github/jn0v/traceglass/core/overlay/MatrixUtilsTest.kt
 - core/session/src/main/kotlin/io/github/jn0v/traceglass/core/session/SettingsData.kt
 - core/session/src/main/kotlin/io/github/jn0v/traceglass/core/session/SettingsRepository.kt
 - core/session/src/main/kotlin/io/github/jn0v/traceglass/core/session/DataStoreSettingsRepository.kt
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModel.kt
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingUiState.kt
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingContent.kt
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/settings/SettingsScreen.kt
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/settings/SettingsViewModel.kt
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/settings/SettingsUiState.kt
+- feature/tracing/src/main/res/values/strings.xml
+- feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/settings/FakeSettingsRepository.kt
+- feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/settings/SettingsViewModelTest.kt

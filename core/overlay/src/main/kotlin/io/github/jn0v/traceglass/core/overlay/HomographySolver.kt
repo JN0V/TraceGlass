@@ -44,7 +44,9 @@ object HomographySolver {
         for (i in 0..7) result[i] = h[i].toFloat()
         result[8] = 1f
 
-        // Determinant sanity check
+        // Determinant sanity check: reject extreme scale ratios.
+        // For A4 paper at 25-40cm, typical det range is 0.05..20.
+        // Bounds 0.01/100 give generous margin for varying paper sizes and distances.
         val det = determinant3x3(result)
         if (det.isNaN() || det.isInfinite()) return null
         val absDet = kotlin.math.abs(det)
@@ -109,7 +111,8 @@ object HomographySolver {
         result[7] = 0f
         result[8] = 1f
 
-        // Sanity check: 2x2 sub-determinant (a*e - b*d) should be reasonable
+        // Sanity check: 2x2 sub-determinant (a*e - b*d) should be reasonable.
+        // Same bounds as solveHomography — reject extreme scale ratios.
         val det2x2 = result[0] * result[4] - result[1] * result[3]
         if (det2x2.isNaN() || det2x2.isInfinite()) return null
         val absDet = kotlin.math.abs(det2x2)
@@ -172,9 +175,14 @@ object HomographySolver {
             // Use the second constraint |v1| = |v2| to estimate f instead.
             // |v1|² = (a1/f)² + (b1/f)² + h6² = (a2/f)² + (b2/f)² + h7²
             // f² = (a1²+b1² - a2²-b2²) / (h7² - h6²)
+            // NOTE: This fallback is degenerate when paper is near-square (columns
+            // have similar norms → numerator ≈ 0). Guard with relative threshold.
             val num2 = a1 * a1 + b1 * b1 - a2 * a2 - b2 * b2
             val den2 = h[7] * h[7] - h[6] * h[6]
             if (abs(den2) < 1e-12) return null
+            // Guard: near-square paper makes num2/den2 unstable
+            val normScale = a1 * a1 + b1 * b1 + a2 * a2 + b2 * b2
+            if (normScale > 1e-12 && abs(num2) / normScale < 1e-4) return null
             val f2 = num2 / den2
             if (f2 < 100.0) return null // unreasonable
             return sqrt(f2).toFloat()
@@ -287,7 +295,9 @@ object HomographySolver {
             h7 += dh7
             h8 += dh8
 
-            // Divergence check
+            // Divergence check: h7/h8 represent perspective foreshortening.
+            // For phone-over-paper setups (f ≥ 400px, tilt ≤ 35°), legitimate
+            // values stay well below 0.1. Exceeding this signals solver divergence.
             if (abs(h7) > 0.1 || abs(h8) > 0.1) return null
         }
 
@@ -346,8 +356,11 @@ object HomographySolver {
      * The orthogonality constraint (used to estimate f) is invariant to paper scale,
      * so f estimated from the wrong AR is still valid for this correction.
      *
-     * @param assumedPaperCoords 4 assumed rectangle corners (same scale as detected)
-     * @param detectedCorners 4 detected positions in pixels
+     * Corner ordering: TL=0, TR=1, BR=2, BL=3 (clockwise from top-left).
+     * Width is computed from coords[0]→coords[1], height from coords[0]→coords[3].
+     *
+     * @param assumedPaperCoords 4 assumed rectangle corners in TL, TR, BR, BL order
+     * @param detectedCorners 4 detected positions in pixels (same ordering)
      * @param f focal length in pixels
      * @param cx principal point x
      * @param cy principal point y
@@ -382,6 +395,7 @@ object HomographySolver {
         // AR_true = AR_assumed * norm1/norm2
         val assumedW = assumedPaperCoords[1].first - assumedPaperCoords[0].first
         val assumedH = assumedPaperCoords[3].second - assumedPaperCoords[0].second
+        // Guard: width/height must be positive (validates TL,TR,BR,BL ordering)
         if (assumedH < 0.001f || assumedW < 0.001f) return null
         val assumedAR = assumedW / assumedH
 
