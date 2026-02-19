@@ -108,4 +108,40 @@ class SettingsViewModelTest {
             assertEquals(1, repo.breakIntervalSetCount)
         }
     }
+
+    @Nested
+    inner class NonDefaultInitialState {
+        @Test
+        fun `loads pre-existing audio feedback enabled from repository`() = runTest(testDispatcher) {
+            repo.setAudioFeedbackEnabled(true)
+            val freshVm = SettingsViewModel(repo)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertTrue(freshVm.uiState.value.audioFeedbackEnabled)
+        }
+
+        @Test
+        fun `loads pre-existing break interval from repository`() = runTest(testDispatcher) {
+            repo.setBreakReminderIntervalMinutes(15)
+            val freshVm = SettingsViewModel(repo)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(15, freshVm.uiState.value.breakReminderIntervalMinutes)
+        }
+    }
+
+    @Nested
+    inner class IntervalValidation {
+        @Test
+        fun `clamps interval below minimum to 5`() = runTest(testDispatcher) {
+            vm.onBreakIntervalChanged(0)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(5, vm.uiState.value.breakReminderIntervalMinutes)
+        }
+
+        @Test
+        fun `clamps interval above maximum to 60`() = runTest(testDispatcher) {
+            vm.onBreakIntervalChanged(100)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(60, vm.uiState.value.breakReminderIntervalMinutes)
+        }
+    }
 }
