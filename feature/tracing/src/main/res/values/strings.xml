@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Session restore dialog -->
+    <string name="resume_session_title">Resume session?</string>
+    <string name="resume_session_message">A previous tracing session was found. Resume with the same settings?</string>
+    <string name="resume_session_confirm">Resume</string>
+    <string name="resume_session_decline">New session</string>
+
+    <!-- Timelapse restore dialog -->
+    <string name="timelapse_restore_title">Timelapse snapshots found</string>
+    <plurals name="timelapse_restore_message">
+        <item quantity="one">%d snapshot from your previous session was found. What would you like to do?</item>
+        <item quantity="other">%d snapshots from your previous session were found. What would you like to do?</item>
+    </plurals>
+    <string name="timelapse_restore_continue">Continue Recording</string>
+    <string name="timelapse_restore_discard">Discard</string>
+    <string name="timelapse_restore_compile">Compile Now</string>
+</resources>

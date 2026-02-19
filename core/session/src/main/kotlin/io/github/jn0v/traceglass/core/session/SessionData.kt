@@ -18,6 +18,6 @@ data class SessionData(
     val viewportPanX: Float = 0f,
     val viewportPanY: Float = 0f
 ) {
-    val hasActiveSession: Boolean
+    val hasSavedOverlay: Boolean
         get() = imageUri != null
 }

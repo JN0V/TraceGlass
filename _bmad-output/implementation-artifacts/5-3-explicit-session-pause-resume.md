@@ -56,3 +56,4 @@ Claude Opus 4 (claude-opus-4-20250514)
 ### File List
 
 - feature/tracing/src/main/kotlin/.../TracingViewModel.kt (modified — 1 line in onToggleSession)
+- feature/tracing/src/main/kotlin/.../TracingContent.kt (verified — wake lock DisposableEffect, no changes needed)

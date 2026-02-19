@@ -22,13 +22,13 @@ class SessionRepositoryTest {
         @Test
         fun `default SessionData has no active session`() {
             val data = SessionData()
-            assertFalse(data.hasActiveSession)
+            assertFalse(data.hasSavedOverlay)
         }
 
         @Test
         fun `SessionData with image URI has active session`() {
             val data = SessionData(imageUri = "content://test")
-            assertTrue(data.hasActiveSession)
+            assertTrue(data.hasSavedOverlay)
         }
 
         @Test

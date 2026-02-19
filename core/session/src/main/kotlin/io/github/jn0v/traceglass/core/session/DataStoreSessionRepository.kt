@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -15,6 +16,12 @@ class DataStoreSessionRepository(
 ) : SessionRepository {
 
     override val sessionData: Flow<SessionData> = dataStore.data.map { prefs ->
+        val version = prefs[KEY_SCHEMA_VERSION] ?: 0
+        if (version != SCHEMA_VERSION && version != 0) {
+            // Incompatible schema — discard stale data and return defaults
+            Log.w(TAG, "Session schema version mismatch: stored=$version, current=$SCHEMA_VERSION — discarding")
+            return@map SessionData()
+        }
         SessionData(
             imageUri = prefs[KEY_IMAGE_URI],
             overlayOffsetX = prefs[KEY_OFFSET_X] ?: 0f,
@@ -37,6 +44,7 @@ class DataStoreSessionRepository(
 
     override suspend fun save(data: SessionData) {
         dataStore.edit { prefs ->
+            prefs[KEY_SCHEMA_VERSION] = SCHEMA_VERSION
             if (data.imageUri != null) {
                 prefs[KEY_IMAGE_URI] = data.imageUri
             } else {
@@ -61,10 +69,16 @@ class DataStoreSessionRepository(
     }
 
     override suspend fun clear() {
-        dataStore.edit { it.clear() }
+        dataStore.edit { prefs ->
+            SESSION_KEYS.forEach { prefs.remove(it) }
+        }
     }
 
     companion object {
+        private const val TAG = "DataStoreSessionRepo"
+        private const val SCHEMA_VERSION = 1
+
+        private val KEY_SCHEMA_VERSION = intPreferencesKey("session_schema_version")
         private val KEY_IMAGE_URI = stringPreferencesKey("session_image_uri")
         private val KEY_OFFSET_X = floatPreferencesKey("session_offset_x")
         private val KEY_OFFSET_Y = floatPreferencesKey("session_offset_y")
@@ -81,5 +95,12 @@ class DataStoreSessionRepository(
         private val KEY_VIEWPORT_ZOOM = floatPreferencesKey("session_viewport_zoom")
         private val KEY_VIEWPORT_PAN_X = floatPreferencesKey("session_viewport_pan_x")
         private val KEY_VIEWPORT_PAN_Y = floatPreferencesKey("session_viewport_pan_y")
+
+        private val SESSION_KEYS: List<Preferences.Key<*>> = listOf(
+            KEY_IMAGE_URI, KEY_OFFSET_X, KEY_OFFSET_Y, KEY_SCALE, KEY_ROTATION,
+            KEY_OPACITY, KEY_COLOR_TINT, KEY_INVERTED, KEY_SESSION_ACTIVE,
+            KEY_TIMELAPSE_COUNT, KEY_TIMELAPSE_RECORDING, KEY_TIMELAPSE_PAUSED,
+            KEY_OVERLAY_LOCKED, KEY_VIEWPORT_ZOOM, KEY_VIEWPORT_PAN_X, KEY_VIEWPORT_PAN_Y
+        )
     }
 }

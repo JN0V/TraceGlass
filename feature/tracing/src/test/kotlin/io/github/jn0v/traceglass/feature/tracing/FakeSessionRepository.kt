@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+// NOTE: duplicated in core/session/src/test — keep in sync (testFixtures incompatible with AGP 8.8)
 class FakeSessionRepository : SessionRepository {
 
     private val _sessionData = MutableStateFlow(SessionData())
