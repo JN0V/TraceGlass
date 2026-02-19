@@ -1,18 +1,25 @@
 package io.github.jn0v.traceglass.feature.onboarding
 
 import androidx.lifecycle.viewModelScope
+import io.github.jn0v.traceglass.core.session.SessionData
+import io.github.jn0v.traceglass.core.session.SessionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -22,12 +29,19 @@ import org.junit.jupiter.api.Test
 class WalkthroughViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
+    private lateinit var fakeOnboardingRepo: FakeOnboardingRepository
+    private lateinit var fakeSessionRepo: FakeSessionRepository
     private lateinit var vm: WalkthroughViewModel
 
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        vm = WalkthroughViewModel()
+        fakeOnboardingRepo = FakeOnboardingRepository()
+        fakeSessionRepo = FakeSessionRepository()
+        vm = WalkthroughViewModel(
+            onboardingRepository = fakeOnboardingRepo,
+            sessionRepository = fakeSessionRepo
+        )
     }
 
     @AfterEach
@@ -107,7 +121,7 @@ class WalkthroughViewModelTest {
     }
 
     @Nested
-    inner class Flow {
+    inner class StepFlow {
         @Test
         fun `onProceedToPickImage transitions to PICK_IMAGE`() {
             vm.onProceedToPickImage()
@@ -115,15 +129,66 @@ class WalkthroughViewModelTest {
         }
 
         @Test
-        fun `onImagePicked transitions to SHOW_TOOLTIP`() {
-            vm.onImagePicked()
+        fun `onImagePicked transitions to SHOW_TOOLTIP and stores imageUri`() = runVmTest {
+            vm.onImagePicked("file:///data/reference_image.jpg")
+            advanceUntilIdle()
             assertEquals(WalkthroughStep.SHOW_TOOLTIP, vm.uiState.value.step)
+            assertEquals("file:///data/reference_image.jpg", vm.uiState.value.imageUri)
         }
 
         @Test
-        fun `onTooltipDismissed transitions to COMPLETED`() {
+        fun `onImagePicked saves image URI to session repository`() = runVmTest {
+            vm.onImagePicked("file:///data/reference_image.jpg")
+            advanceUntilIdle()
+            assertEquals(1, fakeSessionRepo.saveCount)
+            assertEquals("file:///data/reference_image.jpg", fakeSessionRepo.lastSavedData().imageUri)
+        }
+
+        @Test
+        fun `onTooltipDismissed transitions to COMPLETED`() = runVmTest {
             vm.onTooltipDismissed()
+            advanceUntilIdle()
             assertEquals(WalkthroughStep.COMPLETED, vm.uiState.value.step)
+        }
+
+        @Test
+        fun `onTooltipDismissed persists tooltip shown flag`() = runVmTest {
+            vm.onTooltipDismissed()
+            advanceUntilIdle()
+            assertEquals(1, fakeOnboardingRepo.setTooltipShownCount)
+        }
+    }
+
+    @Nested
+    inner class FullFlow {
+        @Test
+        fun `complete walkthrough flow from detection to completion`() = runVmTest {
+            // Start detection
+            vm.startDetection()
+            advanceTimeBy(2000)
+            assertEquals(WalkthroughStep.DETECTING_MARKERS, vm.uiState.value.step)
+
+            // Markers detected
+            vm.onMarkersDetected()
+            assertEquals(WalkthroughStep.MARKERS_FOUND, vm.uiState.value.step)
+
+            // Proceed to pick image
+            vm.onProceedToPickImage()
+            assertEquals(WalkthroughStep.PICK_IMAGE, vm.uiState.value.step)
+
+            // Image picked
+            vm.onImagePicked("file:///data/reference_image.jpg")
+            advanceUntilIdle()
+            assertEquals(WalkthroughStep.SHOW_TOOLTIP, vm.uiState.value.step)
+
+            // Tooltip dismissed
+            vm.onTooltipDismissed()
+            advanceUntilIdle()
+            assertEquals(WalkthroughStep.COMPLETED, vm.uiState.value.step)
+
+            // Verify persistence
+            assertEquals(1, fakeSessionRepo.saveCount)
+            assertEquals(1, fakeOnboardingRepo.setTooltipShownCount)
         }
     }
 }

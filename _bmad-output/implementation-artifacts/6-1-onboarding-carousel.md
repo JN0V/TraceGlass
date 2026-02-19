@@ -40,8 +40,11 @@ so that I understand what the app does and how to set up.
 - **Module:** `:feature:onboarding` — depends only on `:core:session`
 - **MVVM pattern:** OnboardingScreen (stateful, koinViewModel) → OnboardingPages (stateless content) → OnboardingViewModel → OnboardingUiState
 - **State management:** Single `MutableStateFlow<OnboardingUiState>` exposed as `StateFlow`, collected via `collectAsStateWithLifecycle()`
-- **HorizontalPager:** Requires `@OptIn(ExperimentalFoundationApi::class)`, page state synced bidirectionally with ViewModel via `LaunchedEffect`
-- **DataStore persistence:** `preferencesDataStore(name = "onboarding_prefs")` with single boolean key `KEY_COMPLETED`
+- **HorizontalPager:** Page state synced bidirectionally with ViewModel via `LaunchedEffect` using `settledPage` (not `currentPage`) to avoid animation feedback loops
+- **DataStore persistence:** `preferencesDataStore(name = "onboarding_prefs")` with keys: `KEY_COMPLETED` (Boolean), `KEY_TOOLTIP_SHOWN` (Boolean), `KEY_SELECTED_TIER` (String)
+- **i18n:** All user-facing strings in `res/values/strings.xml`
+- **Accessibility:** `contentDescription` on page indicators, `selectableGroup` on tier chips
+- **Back navigation:** `BackHandler` navigates to previous slide; system back on page 0 exits onboarding
 - **Tier selection:** `FilterChip` (Material 3) for mutually exclusive choice between 3 setup tiers
 - **Skip behavior:** Both "Skip" and "Get Started" (on last page) call `onComplete()`/`onSkip()` which persist completion flag and trigger navigation callback
 
@@ -70,15 +73,33 @@ Claude Opus 4 (claude-opus-4-20250514)
 - 3-slide HorizontalPager carousel with swipe + button navigation
 - SetupTier enum (FULL_DIY, SEMI_EQUIPPED, FULL_KIT) with FilterChip selection on slide 2
 - Tier-specific marker preparation instructions on slide 3
-- OnboardingRepository with DataStore persistence (isOnboardingCompleted flow)
-- FakeOnboardingRepository for unit tests
-- OnboardingViewModel tests: initial state, navigation, tier selection, completion persistence
-- MainActivity checks completion flag on launch — skips onboarding if already completed
-- `@OptIn(ExperimentalFoundationApi::class)` required for HorizontalPager
+- OnboardingRepository with DataStore persistence (isOnboardingCompleted, isTooltipShown, selectedTier flows)
+- FakeOnboardingRepository for unit tests (with call counters for all methods)
+- OnboardingViewModel tests: initial state, navigation bounds, tier selection + persistence, completion persistence, reopen behavior
+- MainActivity checks completion flag on launch — skips onboarding if already completed; shows loading spinner during DataStore init
+- BackHandler for system back navigation within carousel
+- All strings extracted to strings.xml for i18n
+- Accessibility: semantics on page indicators and tier chips
+- @Preview annotations on WelcomePage, TierSelectionPage, MarkerPreparationPage
 
 ### Change Log
 
 - 2026-02-09: Story 6.1 implemented — onboarding carousel with 3-slide HorizontalPager
+- 2026-02-19: Adversarial review fixes — 14 findings addressed:
+  - Extracted all hardcoded strings to `strings.xml` for i18n readiness
+  - Added accessibility: `contentDescription` on page indicator dots, `semantics { selectableGroup() }` on tier chips, increased dot size to 12dp
+  - Removed unused `AnimatedVisibility` import
+  - Extracted `PAGE_COUNT` constant, replaced all magic number `3` / `2` references
+  - Added bounds validation to `onPageChanged()` via `coerceIn(0, PAGE_COUNT - 1)`
+  - Fixed pager bidirectional sync: use `settledPage` instead of `currentPage` to prevent animation feedback loop
+  - Added `BackHandler` for system back navigation (goes to previous slide when not on page 0)
+  - Added `onPreviousPage()` to ViewModel
+  - Added tier persistence: `selectedTier` stored in DataStore, restored on init
+  - Fixed `resetOnboarding()` to also clear `tooltip_shown` flag and `selected_tier`
+  - Marked `isReopened` as `@Volatile` for thread-safety
+  - Added `CircularProgressIndicator` during DataStore loading in `MainActivity`
+  - Added `@Preview` annotations to `WelcomePage`, `TierSelectionPage`, `MarkerPreparationPage`
+  - Added tests: bounds clamping, `onPreviousPage`, tier persistence on init, tier persistence on selection
 
 ### File List
 
@@ -90,8 +111,9 @@ Claude Opus 4 (claude-opus-4-20250514)
 - feature/onboarding/src/main/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingRepository.kt
 - feature/onboarding/src/main/kotlin/io/github/jn0v/traceglass/feature/onboarding/DataStoreOnboardingRepository.kt
 - feature/onboarding/src/main/kotlin/io/github/jn0v/traceglass/feature/onboarding/di/OnboardingModule.kt
+- feature/onboarding/src/main/res/values/strings.xml
 - feature/onboarding/src/test/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingViewModelTest.kt
 - feature/onboarding/src/test/kotlin/io/github/jn0v/traceglass/feature/onboarding/FakeOnboardingRepository.kt
 
 **Modified files:**
-- app/src/main/kotlin/io/github/jn0v/traceglass/MainActivity.kt (added onboarding route + completion check)
+- app/src/main/kotlin/io/github/jn0v/traceglass/MainActivity.kt (added onboarding route + completion check + loading indicator)

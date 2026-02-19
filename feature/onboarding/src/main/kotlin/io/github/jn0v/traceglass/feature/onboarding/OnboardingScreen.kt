@@ -1,7 +1,6 @@
 package io.github.jn0v.traceglass.feature.onboarding
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,21 +27,27 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(
     viewModel: OnboardingViewModel = koinViewModel(),
     onComplete: () -> Unit,
+    onSkip: () -> Unit = onComplete,
     onNavigateToGuide: () -> Unit = {},
     mode: OnboardingMode = OnboardingMode.FIRST_TIME
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    val pagerState = rememberPagerState(pageCount = { OnboardingViewModel.PAGE_COUNT })
+
+    BackHandler(enabled = uiState.currentPage > 0) {
+        viewModel.onPreviousPage()
+    }
 
     LaunchedEffect(mode) {
         if (mode == OnboardingMode.REOPENED) {
@@ -50,18 +55,20 @@ fun OnboardingScreen(
         }
     }
 
-    LaunchedEffect(uiState.isCompleted) {
-        if (uiState.isCompleted) onComplete()
+    LaunchedEffect(uiState.isCompleted, uiState.wasSkipped) {
+        if (uiState.isCompleted) {
+            if (uiState.wasSkipped) onSkip() else onComplete()
+        }
     }
 
     LaunchedEffect(uiState.currentPage) {
-        if (pagerState.currentPage != uiState.currentPage) {
+        if (pagerState.settledPage != uiState.currentPage) {
             pagerState.animateScrollToPage(uiState.currentPage)
         }
     }
 
     LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }.collect { page ->
+        snapshotFlow { pagerState.settledPage }.collect { page ->
             viewModel.onPageChanged(page)
         }
     }
@@ -77,7 +84,7 @@ fun OnboardingScreen(
             onClick = viewModel::onSkip,
             modifier = Modifier.align(Alignment.End)
         ) {
-            Text("Skip")
+            Text(stringResource(R.string.onboarding_skip))
         }
 
         HorizontalPager(
@@ -100,36 +107,53 @@ fun OnboardingScreen(
         }
 
         PageIndicator(
-            pageCount = 3,
-            currentPage = pagerState.currentPage
+            pageCount = OnboardingViewModel.PAGE_COUNT,
+            currentPage = pagerState.settledPage
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = {
-                if (uiState.currentPage < 2) viewModel.onNextPage()
+                if (uiState.currentPage < OnboardingViewModel.PAGE_COUNT - 1) viewModel.onNextPage()
                 else viewModel.onComplete()
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (uiState.currentPage < 2) "Next" else "Get Started")
+            Text(
+                if (uiState.currentPage < OnboardingViewModel.PAGE_COUNT - 1)
+                    stringResource(R.string.onboarding_next)
+                else
+                    stringResource(R.string.onboarding_get_started)
+            )
         }
     }
 }
 
 @Composable
 private fun PageIndicator(pageCount: Int, currentPage: Int) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.semantics {
+            contentDescription = "Page ${currentPage + 1} of $pageCount"
+        }
+    ) {
         repeat(pageCount) { index ->
             Box(
                 modifier = Modifier
-                    .size(8.dp)
+                    .size(12.dp)
                     .clip(CircleShape)
                     .background(
                         if (index == currentPage) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                     )
+                    .semantics {
+                        contentDescription = if (index == currentPage) {
+                            "Page ${index + 1}, current"
+                        } else {
+                            "Page ${index + 1}"
+                        }
+                    }
             )
         }
     }

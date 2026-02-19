@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -15,18 +16,34 @@ class OnboardingViewModel(
     private val _uiState = MutableStateFlow(OnboardingUiState())
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
 
+    @Volatile
     private var isReopened = false
 
+    init {
+        viewModelScope.launch {
+            val savedTier = repository.selectedTier.first()
+            if (savedTier != null) {
+                _uiState.update { it.copy(selectedTier = savedTier) }
+            }
+        }
+    }
+
     fun onPageChanged(page: Int) {
-        _uiState.update { it.copy(currentPage = page) }
+        val clamped = page.coerceIn(0, PAGE_COUNT - 1)
+        _uiState.update { it.copy(currentPage = clamped) }
     }
 
     fun onTierSelected(tier: SetupTier) {
         _uiState.update { it.copy(selectedTier = tier) }
+        viewModelScope.launch { repository.setSelectedTier(tier) }
     }
 
     fun onNextPage() {
-        _uiState.update { it.copy(currentPage = (it.currentPage + 1).coerceAtMost(2)) }
+        _uiState.update { it.copy(currentPage = (it.currentPage + 1).coerceAtMost(PAGE_COUNT - 1)) }
+    }
+
+    fun onPreviousPage() {
+        _uiState.update { it.copy(currentPage = (it.currentPage - 1).coerceAtLeast(0)) }
     }
 
     fun onReopen() {
@@ -39,11 +56,20 @@ class OnboardingViewModel(
             if (!isReopened) {
                 repository.setOnboardingCompleted()
             }
-            _uiState.update { it.copy(isCompleted = true) }
+            _uiState.update { it.copy(isCompleted = true, wasSkipped = false) }
         }
     }
 
     fun onSkip() {
-        onComplete()
+        viewModelScope.launch {
+            if (!isReopened) {
+                repository.setOnboardingCompleted()
+            }
+            _uiState.update { it.copy(isCompleted = true, wasSkipped = true) }
+        }
+    }
+
+    companion object {
+        const val PAGE_COUNT = 3
     }
 }
