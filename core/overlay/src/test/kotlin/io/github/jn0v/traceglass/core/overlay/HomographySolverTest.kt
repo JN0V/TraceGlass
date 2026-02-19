@@ -261,17 +261,19 @@ class HomographySolverTest {
         }
 
         @Test
-        fun `fronto-parallel view returns value or null`() {
-            // At 0° tilt, h6≈0, h7≈0 → degenerate for primary constraint
-            // Falls back to secondary constraint or returns null
+        fun `fronto-parallel view uses equal-norm fallback or returns null`() {
+            // At 0° tilt, h6≈0, h7≈0 → primary constraint degenerate.
+            // Equal-norm fallback may succeed for non-square paper (A4 AR≈0.71).
+            // If it returns a value, it must be within 50% of the true focal length.
             val f = 800f
             val frameCoords = projectA4(f, tiltDeg = 0f)
             val estimated = HomographySolver.estimateFocalLength(a4Corners, frameCoords, cx, cy)
-            // Either null (acceptable: no perspective to extract f from) or a large value
             if (estimated != null) {
-                assertTrue(estimated > 100f,
-                    "Fronto-parallel focal should be large or null: $estimated")
+                val relError = abs(estimated - f) / f
+                assertTrue(relError < 0.50f,
+                    "Fronto-parallel fallback: estimated=$estimated, expected=$f, relError=$relError")
             }
+            // null is acceptable when both constraints are degenerate
         }
     }
 
@@ -329,6 +331,7 @@ class HomographySolverTest {
         fun `recovers 4th corner at 30 degree tilt`() {
             val f = 800f
             val frameCoords = projectA4(f, tiltDeg = 30f)
+            var solvedCount = 0
 
             for (hiddenId in 0..3) {
                 val visibleIds = (0..3).filter { it != hiddenId }
@@ -338,6 +341,7 @@ class HomographySolverTest {
                 val H = HomographySolver.solveConstrainedHomography(paperPts, framePts, f, cx, cy)
                 // At 30° this is harder; may return null for some corners
                 if (H != null) {
+                    solvedCount++
                     val (px, py) = a4Corners[hiddenId]
                     val w = H[6] * px + H[7] * py + H[8]
                     val estX = (H[0] * px + H[1] * py + H[2]) / w
@@ -347,6 +351,8 @@ class HomographySolverTest {
                         "30° tilt hidden=$hiddenId: error=${err}px")
                 }
             }
+            assertTrue(solvedCount >= 2,
+                "30° tilt: expected at least 2 corner solutions, got $solvedCount")
         }
 
         @Test
