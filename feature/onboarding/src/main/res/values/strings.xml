@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- OnboardingScreen -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_get_started">Get Started</string>
+    <string name="onboarding_page_indicator">Page %1$d of %2$d</string>
+    <string name="onboarding_page_dot">Page %1$d</string>
+    <string name="onboarding_page_dot_current">Page %1$d, current</string>
+
+    <!-- WelcomePage (slide 1) -->
+    <string name="onboarding_welcome_title">Welcome to TraceGlass</string>
+    <string name="onboarding_welcome_body">Turn your phone into a tracing lightbox. Point your camera at your drawing surface, pick a reference image, and trace with precision.</string>
+
+    <!-- TierSelectionPage (slide 2) -->
+    <string name="onboarding_tier_title">Choose Your Setup</string>
+    <string name="onboarding_tier_subtitle">Select the option that matches your equipment.</string>
+    <string name="onboarding_tier_full_diy">Full DIY — Print your own markers</string>
+    <string name="onboarding_tier_semi_equipped">Semi-equipped — Printed markers</string>
+    <string name="onboarding_tier_full_kit">Full kit — Printed markers + stand</string>
+
+    <!-- MarkerPreparationPage (slide 3) -->
+    <string name="onboarding_markers_title">Prepare Your Markers</string>
+    <string name="onboarding_markers_full_diy">Print two ArUco markers (ID #0 and #1) at about 2 cm each. Tape them at the top-left and top-right corners of your drawing area, so your hands never cover them. Prop your phone about 25–30 cm above the surface so the camera sees both markers.</string>
+    <string name="onboarding_markers_semi_equipped">Print the ArUco marker sheet from the setup guide. Cut out markers #0 and #1, tape them at the top-left and top-right corners of your drawing area. Position your phone about 25–30 cm above so both markers stay visible while you draw.</string>
+    <string name="onboarding_markers_full_kit">Print the ArUco marker sheet. Tape markers #0 and #1 at the top-left and top-right corners. Mount your phone on the stand about 25–30 cm above the surface — high enough to see both markers, low enough to trace comfortably.</string>
+    <string name="onboarding_view_guide">View detailed setup guide</string>
+
+    <!-- WalkthroughScreen -->
+    <string name="walkthrough_camera_permission_required">Camera permission is required for the walkthrough</string>
+    <string name="walkthrough_select_reference_image">Select a reference image…</string>
+
+    <!-- DetectingOverlay -->
+    <string name="walkthrough_point_camera">Point your camera at your markers</string>
+    <string name="walkthrough_searching">Searching… %1$ds</string>
+    <string name="walkthrough_guidance_hint">Try adjusting the angle or lighting</string>
+
+    <!-- MarkersFoundOverlay -->
+    <string name="walkthrough_markers_detected">Markers detected!</string>
+    <string name="walkthrough_setup_working">Your setup is working correctly</string>
+    <string name="walkthrough_continue">Continue</string>
+
+    <!-- TooltipOverlay -->
+    <string name="walkthrough_tooltip_opacity">Adjust opacity here</string>
+    <string name="walkthrough_tooltip_dismiss">Tap anywhere to dismiss</string>
+</resources>

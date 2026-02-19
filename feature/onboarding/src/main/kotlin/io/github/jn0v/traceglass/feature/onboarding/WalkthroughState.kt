@@ -12,5 +12,6 @@ data class WalkthroughUiState(
     val step: WalkthroughStep = WalkthroughStep.DETECTING_MARKERS,
     val elapsedSeconds: Int = 0,
     val markersDetected: Boolean = false,
-    val showGuidance: Boolean = false
+    val showGuidance: Boolean = false,
+    val imageUri: String? = null
 )

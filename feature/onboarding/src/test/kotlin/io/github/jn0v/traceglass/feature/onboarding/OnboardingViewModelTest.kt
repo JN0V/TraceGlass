@@ -31,7 +31,11 @@ class OnboardingViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = OnboardingViewModel(repo)
+    private fun createViewModel(): OnboardingViewModel {
+        val vm = OnboardingViewModel(repo)
+        testDispatcher.scheduler.advanceUntilIdle()
+        return vm
+    }
 
     @Nested
     inner class InitialState {
@@ -52,6 +56,19 @@ class OnboardingViewModelTest {
             val vm = createViewModel()
             assertFalse(vm.uiState.value.isCompleted)
         }
+
+        @Test
+        fun `restores persisted tier on init`() = runTest {
+            repo.setSelectedTier(SetupTier.FULL_KIT)
+            val vm = createViewModel()
+            assertEquals(SetupTier.FULL_KIT, vm.uiState.value.selectedTier)
+        }
+
+        @Test
+        fun `uses default tier when no persisted tier`() {
+            val vm = createViewModel()
+            assertEquals(SetupTier.FULL_DIY, vm.uiState.value.selectedTier)
+        }
     }
 
     @Nested
@@ -64,12 +81,27 @@ class OnboardingViewModelTest {
         }
 
         @Test
-        fun `onNextPage does not exceed page 2`() {
+        fun `onNextPage does not exceed last page`() {
+            val vm = createViewModel()
+            repeat(OnboardingViewModel.PAGE_COUNT + 1) { vm.onNextPage() }
+            assertEquals(OnboardingViewModel.PAGE_COUNT - 1, vm.uiState.value.currentPage)
+        }
+
+        @Test
+        fun `onPreviousPage goes back`() {
             val vm = createViewModel()
             vm.onNextPage()
             vm.onNextPage()
-            vm.onNextPage()
             assertEquals(2, vm.uiState.value.currentPage)
+            vm.onPreviousPage()
+            assertEquals(1, vm.uiState.value.currentPage)
+        }
+
+        @Test
+        fun `onPreviousPage does not go below 0`() {
+            val vm = createViewModel()
+            vm.onPreviousPage()
+            assertEquals(0, vm.uiState.value.currentPage)
         }
 
         @Test
@@ -77,6 +109,20 @@ class OnboardingViewModelTest {
             val vm = createViewModel()
             vm.onPageChanged(2)
             assertEquals(2, vm.uiState.value.currentPage)
+        }
+
+        @Test
+        fun `onPageChanged clamps negative values to 0`() {
+            val vm = createViewModel()
+            vm.onPageChanged(-1)
+            assertEquals(0, vm.uiState.value.currentPage)
+        }
+
+        @Test
+        fun `onPageChanged clamps values above max to last page`() {
+            val vm = createViewModel()
+            vm.onPageChanged(100)
+            assertEquals(OnboardingViewModel.PAGE_COUNT - 1, vm.uiState.value.currentPage)
         }
     }
 
@@ -95,6 +141,14 @@ class OnboardingViewModelTest {
             vm.onTierSelected(SetupTier.FULL_KIT)
             assertEquals(SetupTier.FULL_KIT, vm.uiState.value.selectedTier)
         }
+
+        @Test
+        fun `onTierSelected persists to repository`() = runTest {
+            val vm = createViewModel()
+            vm.onTierSelected(SetupTier.SEMI_EQUIPPED)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(1, repo.setTierCount)
+        }
     }
 
     @Nested
@@ -105,6 +159,7 @@ class OnboardingViewModelTest {
             vm.onComplete()
             testDispatcher.scheduler.advanceUntilIdle()
             assertTrue(vm.uiState.value.isCompleted)
+            assertFalse(vm.uiState.value.wasSkipped)
         }
 
         @Test
@@ -116,11 +171,12 @@ class OnboardingViewModelTest {
         }
 
         @Test
-        fun `onSkip marks as completed`() = runTest {
+        fun `onSkip marks as completed with wasSkipped true`() = runTest {
             val vm = createViewModel()
             vm.onSkip()
             testDispatcher.scheduler.advanceUntilIdle()
             assertTrue(vm.uiState.value.isCompleted)
+            assertTrue(vm.uiState.value.wasSkipped)
             assertEquals(1, repo.setCompletedCount)
         }
     }

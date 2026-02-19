@@ -2,6 +2,8 @@ package io.github.jn0v.traceglass.feature.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.jn0v.traceglass.core.session.SessionData
+import io.github.jn0v.traceglass.core.session.SessionRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,7 +12,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class WalkthroughViewModel : ViewModel() {
+class WalkthroughViewModel(
+    private val onboardingRepository: OnboardingRepository,
+    private val sessionRepository: SessionRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WalkthroughUiState())
     val uiState: StateFlow<WalkthroughUiState> = _uiState.asStateFlow()
@@ -50,11 +55,17 @@ class WalkthroughViewModel : ViewModel() {
         _uiState.update { it.copy(step = WalkthroughStep.PICK_IMAGE) }
     }
 
-    fun onImagePicked() {
-        _uiState.update { it.copy(step = WalkthroughStep.SHOW_TOOLTIP) }
+    fun onImagePicked(imageUri: String) {
+        viewModelScope.launch {
+            sessionRepository.save(SessionData(imageUri = imageUri))
+        }
+        _uiState.update { it.copy(step = WalkthroughStep.SHOW_TOOLTIP, imageUri = imageUri) }
     }
 
     fun onTooltipDismissed() {
+        viewModelScope.launch {
+            onboardingRepository.setTooltipShown()
+        }
         _uiState.update { it.copy(step = WalkthroughStep.COMPLETED) }
     }
 

@@ -6,6 +6,8 @@ import io.github.jn0v.traceglass.feature.onboarding.DataStoreOnboardingRepositor
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingRepository
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingViewModel
 import io.github.jn0v.traceglass.feature.onboarding.SetupGuideViewModel
+import io.github.jn0v.traceglass.feature.onboarding.WalkthroughAnalyzer
+import io.github.jn0v.traceglass.feature.onboarding.WalkthroughViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -13,6 +15,8 @@ private val Context.onboardingDataStore by preferencesDataStore(name = "onboardi
 
 val onboardingModule = module {
     single<OnboardingRepository> { DataStoreOnboardingRepository(get<Context>().onboardingDataStore) }
+    single { WalkthroughAnalyzer(markerDetector = get()) }
     viewModel { OnboardingViewModel(get()) }
+    viewModel { WalkthroughViewModel(onboardingRepository = get(), sessionRepository = get()) }
     viewModel { SetupGuideViewModel() }
 }

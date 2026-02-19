@@ -14,8 +14,13 @@ android {
 
 dependencies {
     implementation(project(":core:session"))
+    implementation(project(":core:camera"))
+    implementation(project(":core:cv"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.view)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -27,6 +32,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
+    implementation(libs.coil.compose)
 
     testImplementation(libs.junit5.api)
     testRuntimeOnly(libs.junit5.engine)
