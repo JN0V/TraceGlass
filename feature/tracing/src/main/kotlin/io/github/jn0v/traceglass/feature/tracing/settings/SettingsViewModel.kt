@@ -45,8 +45,14 @@ class SettingsViewModel(
     }
 
     fun onBreakIntervalChanged(minutes: Int) {
+        val clamped = minutes.coerceIn(MIN_INTERVAL, MAX_INTERVAL)
         viewModelScope.launch {
-            repository.setBreakReminderIntervalMinutes(minutes)
+            repository.setBreakReminderIntervalMinutes(clamped)
         }
+    }
+
+    companion object {
+        const val MIN_INTERVAL = 5
+        const val MAX_INTERVAL = 60
     }
 }

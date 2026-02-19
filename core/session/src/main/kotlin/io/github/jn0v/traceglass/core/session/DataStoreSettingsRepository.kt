@@ -4,21 +4,32 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 
 class DataStoreSettingsRepository(
     private val dataStore: DataStore<Preferences>
 ) : SettingsRepository {
 
-    override val settingsData: Flow<SettingsData> = dataStore.data.map { prefs ->
-        SettingsData(
-            audioFeedbackEnabled = prefs[KEY_AUDIO_FEEDBACK] ?: false,
-            breakReminderEnabled = prefs[KEY_BREAK_REMINDER] ?: false,
-            breakReminderIntervalMinutes = prefs[KEY_BREAK_INTERVAL] ?: 30
-        )
-    }
+    override val settingsData: Flow<SettingsData> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { prefs ->
+            SettingsData(
+                audioFeedbackEnabled = prefs[KEY_AUDIO_FEEDBACK] ?: false,
+                breakReminderEnabled = prefs[KEY_BREAK_REMINDER] ?: false,
+                breakReminderIntervalMinutes = prefs[KEY_BREAK_INTERVAL] ?: 30
+            )
+        }
 
     override suspend fun setAudioFeedbackEnabled(enabled: Boolean) {
         dataStore.edit { it[KEY_AUDIO_FEEDBACK] = enabled }

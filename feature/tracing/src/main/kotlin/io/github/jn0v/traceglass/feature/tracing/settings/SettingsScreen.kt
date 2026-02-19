@@ -2,6 +2,7 @@ package io.github.jn0v.traceglass.feature.tracing.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -21,7 +22,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -73,7 +78,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsContent(
+internal fun SettingsContent(
     uiState: SettingsUiState,
     onAudioFeedbackToggled: (Boolean) -> Unit,
     onBreakReminderToggled: (Boolean) -> Unit,
@@ -94,12 +99,14 @@ private fun SettingsContent(
             trailingContent = {
                 Switch(
                     checked = uiState.audioFeedbackEnabled,
-                    onCheckedChange = onAudioFeedbackToggled,
-                    modifier = Modifier.semantics {
-                        contentDescription = ""
-                    }
+                    onCheckedChange = null
                 )
-            }
+            },
+            modifier = Modifier.toggleable(
+                value = uiState.audioFeedbackEnabled,
+                role = Role.Switch,
+                onValueChange = onAudioFeedbackToggled
+            )
         )
 
         HorizontalDivider()
@@ -110,24 +117,31 @@ private fun SettingsContent(
             trailingContent = {
                 Switch(
                     checked = uiState.breakReminderEnabled,
-                    onCheckedChange = onBreakReminderToggled,
-                    modifier = Modifier.semantics {
-                        contentDescription = ""
-                    }
+                    onCheckedChange = null
                 )
-            }
+            },
+            modifier = Modifier.toggleable(
+                value = uiState.breakReminderEnabled,
+                role = Role.Switch,
+                onValueChange = onBreakReminderToggled
+            )
         )
 
         AnimatedVisibility(visible = uiState.breakReminderEnabled) {
             val intervalDesc = stringResource(R.string.settings_break_interval_slider)
+            var sliderValue by remember { mutableFloatStateOf(uiState.breakReminderIntervalMinutes.toFloat()) }
+            LaunchedEffect(uiState.breakReminderIntervalMinutes) {
+                sliderValue = uiState.breakReminderIntervalMinutes.toFloat()
+            }
             ListItem(
                 headlineContent = {
-                    Text(stringResource(R.string.settings_break_interval, uiState.breakReminderIntervalMinutes))
+                    Text(stringResource(R.string.settings_break_interval, sliderValue.toInt()))
                 },
                 supportingContent = {
                     Slider(
-                        value = uiState.breakReminderIntervalMinutes.toFloat(),
-                        onValueChange = { onBreakIntervalChanged(it.toInt()) },
+                        value = sliderValue,
+                        onValueChange = { sliderValue = it },
+                        onValueChangeFinished = { onBreakIntervalChanged(sliderValue.toInt()) },
                         valueRange = 5f..60f,
                         steps = 10,
                         modifier = Modifier.semantics {
