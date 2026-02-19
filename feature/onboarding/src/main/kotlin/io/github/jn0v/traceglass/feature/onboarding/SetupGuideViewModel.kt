@@ -14,4 +14,11 @@ class SetupGuideViewModel : ViewModel() {
     fun onSectionSelected(section: SetupGuideSection) {
         _uiState.update { it.copy(selectedSection = section) }
     }
+
+    companion object {
+        const val MARKER_SHEET_URL =
+            "https://github.com/jn0v/traceglass/releases/latest/download/markers.pdf"
+        const val STAND_MODEL_URL =
+            "https://github.com/jn0v/traceglass/releases/latest/download/phone-stand.stl"
+    }
 }

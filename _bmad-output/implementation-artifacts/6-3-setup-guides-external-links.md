@@ -173,10 +173,12 @@ Claude Opus 4.6
 - SetupGuideViewModel registered in OnboardingModule Koin DI
 - Full test suite passes (all modules, zero regressions)
 - Build issue: Icons.Default.Link/OpenInNew not available without material-icons-extended — resolved by removing icon, text "(opens browser)" provides sufficient clarity
+- **Fix (2026-02-19):** ExternalLinksSection buttons were disabled (enabled=false, onClick={}). Enabled both buttons and wired LocalUriHandler.openUri() with correct GitHub release URLs for marker sheet PDF and 3D stand STL. No INTERNET permission needed — openUri delegates to system browser via Intent. 768 tests pass, zero regressions.
 
 ### Change Log
 
 - 2026-02-09: Story 6.3 implemented — setup guides, external links, navigation integration
+- 2026-02-19: Fixed ExternalLinksSection — enabled buttons + wired LocalUriHandler.openUri() for marker sheet PDF and 3D stand STL downloads
 
 ### File List
 

@@ -93,7 +93,7 @@ development_status:
   epic-6: in-progress
   6-1-onboarding-carousel: done
   6-2-interactive-camera-walkthrough: done # Code review passed: H1 i18n strings, M3 analyzer tests, M4 URI fallback fix. 4 LOW deferred (L1-L4).
-  6-3-setup-guides-external-links: in-progress # WIP: screen accessible but external link buttons disabled (enabled=false, onClick={})
+  6-3-setup-guides-external-links: review # Fixed: external link buttons enabled with LocalUriHandler.openUri(). 768 tests pass.
   6-4-onboarding-flow-control: done
   epic-6-retrospective: optional
 
