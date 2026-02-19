@@ -37,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -157,20 +158,25 @@ internal fun TracingContent(
         onDispose { audioPlayer.release() }
     }
 
+    val breakReminderText = stringResource(R.string.break_reminder_message)
     LaunchedEffect(showBreakReminder) {
         if (showBreakReminder) {
             if (audioFeedbackEnabled) {
                 audioPlayer.playBreakReminderTone()
             }
-            snackbarHostState.showSnackbar("Time for a break!")
+            snackbarHostState.showSnackbar(
+                message = breakReminderText,
+                duration = SnackbarDuration.Long
+            )
             onBreakReminderDismissed()
         }
     }
 
     // Show snackbar only on explicit lock action (not on session restore)
+    val overlayLockedText = stringResource(R.string.overlay_locked_message)
     LaunchedEffect(showLockSnackbar) {
         if (showLockSnackbar) {
-            snackbarHostState.showSnackbar("Overlay locked")
+            snackbarHostState.showSnackbar(overlayLockedText)
             onLockSnackbarShown()
         }
     }

@@ -884,6 +884,46 @@ class TracingViewModelTest {
 
             assertFalse(viewModel.uiState.value.showBreakReminder)
         }
+
+        @Test
+        fun `disabling reminders mid-session cancels timer`() = runTest(testDispatcher) {
+            val settings = FakeSettingsRepository()
+            settings.setBreakReminderEnabled(true)
+            settings.setBreakReminderIntervalMinutes(30)
+            val viewModel = createViewModelWithSettings(settings)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onToggleSession() // start session
+            testDispatcher.scheduler.advanceTimeBy(20 * 60_000L) // 20min in
+
+            // disable reminders mid-countdown
+            settings.setBreakReminderEnabled(false)
+            testDispatcher.scheduler.runCurrent()
+
+            // advance well past the original interval
+            testDispatcher.scheduler.advanceTimeBy(30 * 60_000L)
+
+            assertFalse(viewModel.uiState.value.showBreakReminder)
+        }
+
+        @Test
+        fun `audioFeedbackEnabled propagates to UI state`() = runTest(testDispatcher) {
+            val settings = FakeSettingsRepository()
+            val viewModel = createViewModelWithSettings(settings)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.audioFeedbackEnabled)
+
+            settings.setAudioFeedbackEnabled(true)
+            testDispatcher.scheduler.runCurrent()
+
+            assertTrue(viewModel.uiState.value.audioFeedbackEnabled)
+
+            settings.setAudioFeedbackEnabled(false)
+            testDispatcher.scheduler.runCurrent()
+
+            assertFalse(viewModel.uiState.value.audioFeedbackEnabled)
+        }
     }
 
     @Nested

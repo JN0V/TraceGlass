@@ -27,6 +27,8 @@
     <string name="settings_break_reminder_toggle">Break reminder toggle</string>
     <string name="settings_break_interval">Reminder interval: %d min</string>
     <string name="settings_break_interval_slider">Break reminder interval slider</string>
+    <string name="break_reminder_message">Time for a break!</string>
+    <string name="overlay_locked_message">Overlay locked</string>
     <string name="settings_setup_guide">Setup guide</string>
     <string name="settings_setup_guide_desc">Marker placement and phone stand tips</string>
     <string name="settings_reopen_onboarding">Re-open onboarding</string>

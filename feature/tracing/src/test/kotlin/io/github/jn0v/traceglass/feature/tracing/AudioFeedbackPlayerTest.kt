@@ -1,7 +1,13 @@
 package io.github.jn0v.traceglass.feature.tracing
 
 import android.content.Context
+import android.util.Log
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 
 /**
@@ -12,6 +18,22 @@ import org.junit.jupiter.api.Test
  * try-catch logic handles this gracefully without crashing.
  */
 class AudioFeedbackPlayerTest {
+
+    companion object {
+        @BeforeAll
+        @JvmStatic
+        fun mockAndroidLog() {
+            mockkStatic(Log::class)
+            every { Log.w(any<String>(), any<String>(), any<Throwable>()) } returns 0
+            every { Log.w(any<String>(), any<String>()) } returns 0
+        }
+
+        @AfterAll
+        @JvmStatic
+        fun unmockAndroidLog() {
+            unmockkStatic(Log::class)
+        }
+    }
 
     private val context: Context = mockk(relaxed = true)
 
