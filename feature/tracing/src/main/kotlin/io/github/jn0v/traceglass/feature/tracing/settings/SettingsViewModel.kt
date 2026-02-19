@@ -25,7 +25,8 @@ class SettingsViewModel(
                     it.copy(
                         audioFeedbackEnabled = data.audioFeedbackEnabled,
                         breakReminderEnabled = data.breakReminderEnabled,
-                        breakReminderIntervalMinutes = data.breakReminderIntervalMinutes
+                        breakReminderIntervalMinutes = data.breakReminderIntervalMinutes,
+                        perspectiveCorrectionEnabled = data.perspectiveCorrectionEnabled
                     )
                 }
             }
@@ -48,6 +49,12 @@ class SettingsViewModel(
         val clamped = minutes.coerceIn(MIN_INTERVAL, MAX_INTERVAL)
         viewModelScope.launch {
             repository.setBreakReminderIntervalMinutes(clamped)
+        }
+    }
+
+    fun onPerspectiveCorrectionToggled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setPerspectiveCorrectionEnabled(enabled)
         }
     }
 

@@ -7,4 +7,5 @@ interface SettingsRepository {
     suspend fun setAudioFeedbackEnabled(enabled: Boolean)
     suspend fun setBreakReminderEnabled(enabled: Boolean)
     suspend fun setBreakReminderIntervalMinutes(minutes: Int)
+    suspend fun setPerspectiveCorrectionEnabled(enabled: Boolean)
 }

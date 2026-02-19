@@ -17,6 +17,8 @@ class FakeSettingsRepository : SettingsRepository {
         private set
     var breakIntervalSetCount: Int = 0
         private set
+    var perspectiveCorrectionSetCount: Int = 0
+        private set
 
     override suspend fun setAudioFeedbackEnabled(enabled: Boolean) {
         audioFeedbackSetCount++
@@ -31,5 +33,10 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setBreakReminderIntervalMinutes(minutes: Int) {
         breakIntervalSetCount++
         _settingsData.value = _settingsData.value.copy(breakReminderIntervalMinutes = minutes)
+    }
+
+    override suspend fun setPerspectiveCorrectionEnabled(enabled: Boolean) {
+        perspectiveCorrectionSetCount++
+        _settingsData.value = _settingsData.value.copy(perspectiveCorrectionEnabled = enabled)
     }
 }

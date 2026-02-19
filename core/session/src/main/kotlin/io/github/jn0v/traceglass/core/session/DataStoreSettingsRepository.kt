@@ -27,7 +27,8 @@ class DataStoreSettingsRepository(
             SettingsData(
                 audioFeedbackEnabled = prefs[KEY_AUDIO_FEEDBACK] ?: false,
                 breakReminderEnabled = prefs[KEY_BREAK_REMINDER] ?: false,
-                breakReminderIntervalMinutes = prefs[KEY_BREAK_INTERVAL] ?: 30
+                breakReminderIntervalMinutes = prefs[KEY_BREAK_INTERVAL] ?: 30,
+                perspectiveCorrectionEnabled = prefs[KEY_PERSPECTIVE_CORRECTION] ?: true
             )
         }
 
@@ -43,9 +44,14 @@ class DataStoreSettingsRepository(
         dataStore.edit { it[KEY_BREAK_INTERVAL] = minutes }
     }
 
+    override suspend fun setPerspectiveCorrectionEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_PERSPECTIVE_CORRECTION] = enabled }
+    }
+
     companion object {
         private val KEY_AUDIO_FEEDBACK = booleanPreferencesKey("settings_audio_feedback")
         private val KEY_BREAK_REMINDER = booleanPreferencesKey("settings_break_reminder")
         private val KEY_BREAK_INTERVAL = intPreferencesKey("settings_break_interval")
+        private val KEY_PERSPECTIVE_CORRECTION = booleanPreferencesKey("settings_perspective_correction")
     }
 }

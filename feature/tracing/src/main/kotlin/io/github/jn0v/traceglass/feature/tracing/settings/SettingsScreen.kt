@@ -69,6 +69,7 @@ fun SettingsScreen(
             onAudioFeedbackToggled = viewModel::onAudioFeedbackToggled,
             onBreakReminderToggled = viewModel::onBreakReminderToggled,
             onBreakIntervalChanged = viewModel::onBreakIntervalChanged,
+            onPerspectiveCorrectionToggled = viewModel::onPerspectiveCorrectionToggled,
             onReopenOnboarding = onReopenOnboarding,
             onSetupGuide = onSetupGuide,
             onAbout = onAbout,
@@ -83,6 +84,7 @@ internal fun SettingsContent(
     onAudioFeedbackToggled: (Boolean) -> Unit,
     onBreakReminderToggled: (Boolean) -> Unit,
     onBreakIntervalChanged: (Int) -> Unit,
+    onPerspectiveCorrectionToggled: (Boolean) -> Unit,
     onReopenOnboarding: () -> Unit,
     onSetupGuide: () -> Unit,
     onAbout: () -> Unit,
@@ -151,6 +153,24 @@ internal fun SettingsContent(
                 }
             )
         }
+
+        HorizontalDivider()
+
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_perspective_correction)) },
+            supportingContent = { Text(stringResource(R.string.settings_perspective_correction_desc)) },
+            trailingContent = {
+                Switch(
+                    checked = uiState.perspectiveCorrectionEnabled,
+                    onCheckedChange = null
+                )
+            },
+            modifier = Modifier.toggleable(
+                value = uiState.perspectiveCorrectionEnabled,
+                role = Role.Switch,
+                onValueChange = onPerspectiveCorrectionToggled
+            )
+        )
 
         HorizontalDivider()
 

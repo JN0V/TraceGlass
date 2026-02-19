@@ -351,12 +351,76 @@ class HomographySolverTest {
 
         @Test
         fun `returns null for degenerate input`() {
-            // All 3 points collinear
+            // All 3 points collinear — 6x6 system is singular since all y=0
             val paperPts = listOf(Pair(0f, 0f), Pair(100f, 0f), Pair(200f, 0f))
             val framePts = listOf(Pair(100f, 100f), Pair(200f, 100f), Pair(300f, 100f))
             val H = HomographySolver.solveConstrainedHomography(paperPts, framePts, 800f, 640f, 360f)
-            // Should return null or a degenerate result
-            // The 6x6 system may be singular since all y=0
+            assertNull(H, "Collinear points should produce null constrained homography")
+        }
+    }
+
+    @Nested
+    inner class CorrectAspectRatio {
+
+        private val a4Width = 210f
+        private val a4Height = 297f
+
+        @Test
+        fun `fronto-parallel A4 returns AR close to 210 div 297`() {
+            val f = 800f
+            val frameCoords = projectA4(f, tiltDeg = 0f)
+            val result = HomographySolver.correctAspectRatio(a4Corners, frameCoords, f, cx, cy)
+            assertNotNull(result, "Should compute AR for fronto-parallel A4")
+            val expectedAR = a4Width / a4Height
+            val relError = abs(result!! - expectedAR) / expectedAR
+            assertTrue(relError < 0.15f,
+                "AR error too large: result=$result, expected=$expectedAR, relError=$relError")
+        }
+
+        @Test
+        fun `tilted A4 still returns reasonable AR`() {
+            val f = 800f
+            val frameCoords = projectA4(f, tiltDeg = 20f)
+            val result = HomographySolver.correctAspectRatio(a4Corners, frameCoords, f, cx, cy)
+            assertNotNull(result, "Should compute AR for tilted A4")
+            assertTrue(result!! > 0.3f && result < 3f,
+                "AR should be reasonable for tilted A4: $result")
+        }
+
+        @Test
+        fun `square paper returns AR close to 1`() {
+            val squareCorners = listOf(
+                Pair(0f, 0f), Pair(200f, 0f), Pair(200f, 200f), Pair(0f, 200f)
+            )
+            val f = 800f
+            // Place square centered, fronto-parallel
+            val hw = 300f / 2f; val hh = 300f / 2f
+            val frameCoords = listOf(
+                Pair(cx - hw, cy - hh), Pair(cx + hw, cy - hh),
+                Pair(cx + hw, cy + hh), Pair(cx - hw, cy + hh)
+            )
+            val result = HomographySolver.correctAspectRatio(squareCorners, frameCoords, f, cx, cy)
+            assertNotNull(result, "Should compute AR for square paper")
+            val relError = abs(result!! - 1f)
+            assertTrue(relError < 0.15f,
+                "Square paper AR should be ~1.0: $result")
+        }
+
+        @Test
+        fun `returns null for wrong number of points`() {
+            val pts3 = listOf(Pair(0f, 0f), Pair(1f, 0f), Pair(1f, 1f))
+            assertNull(HomographySolver.correctAspectRatio(pts3, pts3, 800f, cx, cy))
+        }
+
+        @Test
+        fun `returns null for zero-area assumed rectangle`() {
+            // All x-coords the same → assumedW = 0
+            val degenerateCoords = listOf(
+                Pair(0f, 0f), Pair(0f, 0f), Pair(0f, 297f), Pair(0f, 297f)
+            )
+            val frameCoords = projectA4(800f, tiltDeg = 0f)
+            val result = HomographySolver.correctAspectRatio(degenerateCoords, frameCoords, 800f, cx, cy)
+            assertNull(result, "Zero-width assumed rect should return null")
         }
     }
 }

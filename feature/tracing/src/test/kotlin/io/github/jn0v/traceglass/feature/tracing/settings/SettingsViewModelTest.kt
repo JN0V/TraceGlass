@@ -50,6 +50,11 @@ class SettingsViewModelTest {
         fun `break interval is 30 minutes by default`() {
             assertEquals(30, vm.uiState.value.breakReminderIntervalMinutes)
         }
+
+        @Test
+        fun `perspective correction is on by default`() {
+            assertTrue(vm.uiState.value.perspectiveCorrectionEnabled)
+        }
     }
 
     @Nested
@@ -142,6 +147,32 @@ class SettingsViewModelTest {
             vm.onBreakIntervalChanged(100)
             testDispatcher.scheduler.advanceUntilIdle()
             assertEquals(60, vm.uiState.value.breakReminderIntervalMinutes)
+        }
+    }
+
+    @Nested
+    inner class PerspectiveCorrection {
+        @Test
+        fun `toggle perspective correction disables it`() = runTest(testDispatcher) {
+            vm.onPerspectiveCorrectionToggled(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertFalse(vm.uiState.value.perspectiveCorrectionEnabled)
+        }
+
+        @Test
+        fun `toggle perspective correction persists to repository`() = runTest(testDispatcher) {
+            vm.onPerspectiveCorrectionToggled(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(1, repo.perspectiveCorrectionSetCount)
+        }
+
+        @Test
+        fun `toggle perspective correction back on`() = runTest(testDispatcher) {
+            vm.onPerspectiveCorrectionToggled(false)
+            testDispatcher.scheduler.advanceUntilIdle()
+            vm.onPerspectiveCorrectionToggled(true)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertTrue(vm.uiState.value.perspectiveCorrectionEnabled)
         }
     }
 }
