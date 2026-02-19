@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.jn0v.traceglass.feature.tracing.R
 
@@ -34,6 +37,7 @@ fun AboutScreen(
     onBack: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
+    val githubUrl = stringResource(R.string.about_github_url)
 
     Scaffold(
         topBar = {
@@ -43,7 +47,7 @@ fun AboutScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.about_back)
+                            contentDescription = stringResource(R.string.navigation_back)
                         )
                     }
                 }
@@ -87,15 +91,31 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedButton(
-                onClick = {
-                    uriHandler.openUri("https://github.com/jn0v/traceglass")
-                },
+                onClick = { uriHandler.openUri(githubUrl) },
                 modifier = Modifier.padding(horizontal = 16.dp)
             ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = null,
+                    modifier = Modifier.height(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.about_view_github))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun AboutScreenPreview() {
+    MaterialTheme {
+        AboutScreen(
+            versionName = "0.1.0",
+            versionCode = 1,
+            onBack = {}
+        )
     }
 }

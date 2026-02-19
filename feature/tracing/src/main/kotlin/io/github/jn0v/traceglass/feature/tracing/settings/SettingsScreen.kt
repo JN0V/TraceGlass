@@ -57,7 +57,7 @@ fun SettingsScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.settings_back)
+                            contentDescription = stringResource(R.string.navigation_back)
                         )
                     }
                 }
