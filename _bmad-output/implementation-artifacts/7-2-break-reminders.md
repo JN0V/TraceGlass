@@ -129,15 +129,17 @@ Claude Opus 4.6
 
 ### Completion Notes List
 
-- SettingsRepository injected as optional param (default null) — no breaking change for existing tests
+- SettingsRepository injected as required param — existing tests unaffected (test helper provides default FakeSettingsRepository)
 - Break timer uses single-shot `delay()` coroutine (not while(true)), so no `runVmTest` needed
 - Timer test for interval change uses `runCurrent()` instead of `advanceUntilIdle()` to avoid advancing past new timer
-- AudioFeedbackPlayer is a minimal wrapper around RingtoneManager — no custom audio files needed
-- Snackbar uses M3 `showSnackbar()` suspend function which handles auto-dismiss natively
+- AudioFeedbackPlayer wraps RingtoneManager with proper Ringtone lifecycle management — no custom audio files needed
+- Snackbar uses M3 `showSnackbar()` with `SnackbarDuration.Long` (~10s) per AC #1
+- Interval clamped to 1..120 minutes in restartBreakTimer() to prevent zero-delay loops or negative delay crashes
 
 ### Change Log
 
 - 2026-02-09: Story 7.2 implemented — break reminder timer, snackbar, audio feedback
+- 2026-02-19: Adversarial review fixes — i18n, snackbar duration, interval validation, Ringtone leak, thread safety, 2 new tests
 
 ### File List
 
@@ -145,9 +147,11 @@ Claude Opus 4.6
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/AudioFeedbackPlayer.kt
 
 **Modified files:**
-- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModel.kt (added SettingsRepository, break timer, onBreakReminderDismissed)
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModel.kt (added SettingsRepository, break timer, onBreakReminderDismissed, interval bounds)
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingUiState.kt (added showBreakReminder, audioFeedbackEnabled)
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingScreen.kt (added SnackbarHost, LaunchedEffect for break reminder, audio tone)
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingContent.kt (i18n snackbar strings, SnackbarDuration.Long)
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/di/TracingModule.kt (pass settingsRepository to TracingViewModel)
-- feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModelTest.kt (added BreakReminder nested class with 7 tests)
+- feature/tracing/src/main/res/values/strings.xml (added break_reminder_message, overlay_locked_message)
+- feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModelTest.kt (added BreakReminder nested class with 9 tests)
 

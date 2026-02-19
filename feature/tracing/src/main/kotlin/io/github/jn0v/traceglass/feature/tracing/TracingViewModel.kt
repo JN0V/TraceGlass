@@ -675,8 +675,9 @@ class TracingViewModel(
     private fun restartBreakTimer() {
         breakTimerJob?.cancel()
         if (!breakReminderEnabled || !_uiState.value.isSessionActive) return
+        val intervalMs = breakReminderIntervalMinutes.coerceIn(1, 120).toLong() * 60_000L
         breakTimerJob = viewModelScope.launch {
-            delay(breakReminderIntervalMinutes * 60_000L)
+            delay(intervalMs)
             _uiState.update { it.copy(showBreakReminder = true) }
         }
     }
