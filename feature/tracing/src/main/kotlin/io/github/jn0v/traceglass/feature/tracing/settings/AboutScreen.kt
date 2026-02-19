@@ -22,7 +22,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import io.github.jn0v.traceglass.feature.tracing.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,12 +38,12 @@ fun AboutScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("About") },
+                title = { Text(stringResource(R.string.about_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.about_back)
                         )
                     }
                 }
@@ -56,32 +58,27 @@ fun AboutScreen(
         ) {
             ListItem(
                 headlineContent = {
-                    Text("TraceGlass", style = MaterialTheme.typography.headlineSmall)
+                    Text(stringResource(R.string.about_app_name), style = MaterialTheme.typography.headlineSmall)
                 },
                 supportingContent = {
-                    Text("Version $versionName (build $versionCode)")
+                    Text(stringResource(R.string.about_version, versionName, versionCode))
                 }
             )
 
             HorizontalDivider()
 
             ListItem(
-                headlineContent = { Text("License") },
-                supportingContent = { Text("GNU General Public License v3.0") }
+                headlineContent = { Text(stringResource(R.string.about_license)) },
+                supportingContent = { Text(stringResource(R.string.about_license_value)) }
             )
 
             HorizontalDivider()
 
             ListItem(
-                overlineContent = { Text("Open-source libraries") },
-                headlineContent = { Text("Third-party licenses") },
+                overlineContent = { Text(stringResource(R.string.about_open_source)) },
+                headlineContent = { Text(stringResource(R.string.about_third_party)) },
                 supportingContent = {
-                    Text(
-                        "OpenCV (Apache 2.0)\n" +
-                            "Coil (Apache 2.0)\n" +
-                            "Koin (Apache 2.0)\n" +
-                            "Jetpack libraries (Apache 2.0)"
-                    )
+                    Text(stringResource(R.string.about_third_party_list))
                 }
             )
 
@@ -95,7 +92,7 @@ fun AboutScreen(
                 },
                 modifier = Modifier.padding(horizontal = 16.dp)
             ) {
-                Text("View on GitHub (opens browser)")
+                Text(stringResource(R.string.about_view_github))
             }
 
             Spacer(modifier = Modifier.height(24.dp))

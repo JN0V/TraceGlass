@@ -15,4 +15,34 @@
     <string name="timelapse_restore_continue">Continue Recording</string>
     <string name="timelapse_restore_discard">Discard</string>
     <string name="timelapse_restore_compile">Compile Now</string>
+
+    <!-- SettingsScreen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_audio_feedback">Audio feedback</string>
+    <string name="settings_audio_feedback_desc">Play sound on tracking state changes</string>
+    <string name="settings_audio_feedback_toggle">Audio feedback toggle</string>
+    <string name="settings_break_reminders">Break reminders</string>
+    <string name="settings_break_reminders_desc">Remind to take breaks during tracing</string>
+    <string name="settings_break_reminder_toggle">Break reminder toggle</string>
+    <string name="settings_break_interval">Reminder interval: %d min</string>
+    <string name="settings_break_interval_slider">Break reminder interval slider</string>
+    <string name="settings_setup_guide">Setup guide</string>
+    <string name="settings_setup_guide_desc">Marker placement and phone stand tips</string>
+    <string name="settings_reopen_onboarding">Re-open onboarding</string>
+    <string name="settings_reopen_onboarding_desc">Review the full onboarding walkthrough</string>
+    <string name="settings_about">About</string>
+    <string name="settings_about_desc">App info and licenses</string>
+
+    <!-- AboutScreen -->
+    <string name="about_title">About</string>
+    <string name="about_back">Back</string>
+    <string name="about_app_name">TraceGlass</string>
+    <string name="about_version">Version %1$s (build %2$d)</string>
+    <string name="about_license">License</string>
+    <string name="about_license_value">GNU General Public License v3.0</string>
+    <string name="about_open_source">Open-source libraries</string>
+    <string name="about_third_party">Third-party licenses</string>
+    <string name="about_third_party_list">OpenCV (Apache 2.0)\nCoil (Apache 2.0)\nKoin (Apache 2.0)\nJetpack libraries (Apache 2.0)</string>
+    <string name="about_view_github">View on GitHub (opens browser)</string>
 </resources>

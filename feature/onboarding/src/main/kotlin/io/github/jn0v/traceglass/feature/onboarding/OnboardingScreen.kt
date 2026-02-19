@@ -38,7 +38,7 @@ import org.koin.androidx.compose.koinViewModel
 fun OnboardingScreen(
     viewModel: OnboardingViewModel = koinViewModel(),
     onComplete: () -> Unit,
-    onSkip: () -> Unit = onComplete,
+    onSkip: () -> Unit,
     onNavigateToGuide: () -> Unit = {},
     mode: OnboardingMode = OnboardingMode.FIRST_TIME
 ) {
@@ -132,13 +132,19 @@ fun OnboardingScreen(
 
 @Composable
 private fun PageIndicator(pageCount: Int, currentPage: Int) {
+    val indicatorDescription = stringResource(R.string.onboarding_page_indicator, currentPage + 1, pageCount)
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.semantics {
-            contentDescription = "Page ${currentPage + 1} of $pageCount"
+            contentDescription = indicatorDescription
         }
     ) {
         repeat(pageCount) { index ->
+            val dotDescription = if (index == currentPage) {
+                stringResource(R.string.onboarding_page_dot_current, index + 1)
+            } else {
+                stringResource(R.string.onboarding_page_dot, index + 1)
+            }
             Box(
                 modifier = Modifier
                     .size(12.dp)
@@ -148,11 +154,7 @@ private fun PageIndicator(pageCount: Int, currentPage: Int) {
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                     )
                     .semantics {
-                        contentDescription = if (index == currentPage) {
-                            "Page ${index + 1}, current"
-                        } else {
-                            "Page ${index + 1}"
-                        }
+                        contentDescription = dotDescription
                     }
             )
         }

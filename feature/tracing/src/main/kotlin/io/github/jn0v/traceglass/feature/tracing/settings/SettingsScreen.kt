@@ -23,10 +23,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.jn0v.traceglass.feature.tracing.R
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,12 +47,12 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.settings_back)
                         )
                     }
                 }
@@ -85,14 +89,14 @@ private fun SettingsContent(
             .verticalScroll(rememberScrollState())
     ) {
         ListItem(
-            headlineContent = { Text("Audio feedback") },
-            supportingContent = { Text("Play sound on tracking state changes") },
+            headlineContent = { Text(stringResource(R.string.settings_audio_feedback)) },
+            supportingContent = { Text(stringResource(R.string.settings_audio_feedback_desc)) },
             trailingContent = {
                 Switch(
                     checked = uiState.audioFeedbackEnabled,
                     onCheckedChange = onAudioFeedbackToggled,
                     modifier = Modifier.semantics {
-                        contentDescription = "Audio feedback toggle"
+                        contentDescription = ""
                     }
                 )
             }
@@ -101,23 +105,24 @@ private fun SettingsContent(
         HorizontalDivider()
 
         ListItem(
-            headlineContent = { Text("Break reminders") },
-            supportingContent = { Text("Remind to take breaks during tracing") },
+            headlineContent = { Text(stringResource(R.string.settings_break_reminders)) },
+            supportingContent = { Text(stringResource(R.string.settings_break_reminders_desc)) },
             trailingContent = {
                 Switch(
                     checked = uiState.breakReminderEnabled,
                     onCheckedChange = onBreakReminderToggled,
                     modifier = Modifier.semantics {
-                        contentDescription = "Break reminder toggle"
+                        contentDescription = ""
                     }
                 )
             }
         )
 
         AnimatedVisibility(visible = uiState.breakReminderEnabled) {
+            val intervalDesc = stringResource(R.string.settings_break_interval_slider)
             ListItem(
                 headlineContent = {
-                    Text("Reminder interval: ${uiState.breakReminderIntervalMinutes} min")
+                    Text(stringResource(R.string.settings_break_interval, uiState.breakReminderIntervalMinutes))
                 },
                 supportingContent = {
                     Slider(
@@ -126,7 +131,7 @@ private fun SettingsContent(
                         valueRange = 5f..60f,
                         steps = 10,
                         modifier = Modifier.semantics {
-                            contentDescription = "Break reminder interval slider"
+                            contentDescription = intervalDesc
                         }
                     )
                 }
@@ -136,25 +141,25 @@ private fun SettingsContent(
         HorizontalDivider()
 
         ListItem(
-            headlineContent = { Text("Setup guide") },
-            supportingContent = { Text("Marker placement and phone stand tips") },
-            modifier = Modifier.clickable(onClick = onSetupGuide)
+            headlineContent = { Text(stringResource(R.string.settings_setup_guide)) },
+            supportingContent = { Text(stringResource(R.string.settings_setup_guide_desc)) },
+            modifier = Modifier.clickable(role = Role.Button, onClick = onSetupGuide)
         )
 
         HorizontalDivider()
 
         ListItem(
-            headlineContent = { Text("Re-open onboarding") },
-            supportingContent = { Text("Review the full onboarding walkthrough") },
-            modifier = Modifier.clickable(onClick = onReopenOnboarding)
+            headlineContent = { Text(stringResource(R.string.settings_reopen_onboarding)) },
+            supportingContent = { Text(stringResource(R.string.settings_reopen_onboarding_desc)) },
+            modifier = Modifier.clickable(role = Role.Button, onClick = onReopenOnboarding)
         )
 
         HorizontalDivider()
 
         ListItem(
-            headlineContent = { Text("About") },
-            supportingContent = { Text("App info and licenses") },
-            modifier = Modifier.clickable(onClick = onAbout)
+            headlineContent = { Text(stringResource(R.string.settings_about)) },
+            supportingContent = { Text(stringResource(R.string.settings_about_desc)) },
+            modifier = Modifier.clickable(role = Role.Button, onClick = onAbout)
         )
     }
 }
