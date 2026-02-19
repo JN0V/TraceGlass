@@ -106,16 +106,19 @@ Claude Opus 4.6
 - AboutScreen is purely static — no ViewModel, no repository, receives version info as parameters
 - Enabled `buildConfig = true` in app/build.gradle.kts (required since AGP 8+ for BuildConfig generation)
 - GitHub link opens in external browser via LocalUriHandler — no INTERNET permission needed
+- **Adversarial review (2026-02-19):** H1 icon was phone silhouette not glass lens (redesigned), H2 no monochrome layer (added), M3 hardcoded URL (moved to string resource), M4 no @Preview (added), M5 safe zone violation (fixed in redesign), L6 duplicate Back strings (consolidated to navigation_back), L8 no external link icon (added OpenInNew)
 
 ### Change Log
 
 - 2026-02-09: Story 7.3 implemented — adaptive app icon, about screen with version/licenses
+- 2026-02-19: Adversarial review fixes — icon redesign (glass lens, not phone), monochrome layer, i18n, a11y, preview
 
 ### File List
 
 **New files:**
 - app/src/main/res/drawable/ic_launcher_foreground.xml
 - app/src/main/res/drawable/ic_launcher_background.xml
+- app/src/main/res/drawable/ic_launcher_monochrome.xml
 - app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
 - app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
 - feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/settings/AboutScreen.kt
@@ -124,4 +127,7 @@ Claude Opus 4.6
 - app/src/main/AndroidManifest.xml (added android:icon and android:roundIcon)
 - app/build.gradle.kts (enabled buildConfig = true)
 - app/src/main/kotlin/io/github/jn0v/traceglass/MainActivity.kt (added "about" route, wired onAbout callback)
+- feature/tracing/src/main/res/values/strings.xml (consolidated Back strings, added GitHub URL resource)
+- feature/tracing/src/main/kotlin/.../settings/SettingsScreen.kt (navigation_back string ref)
+- feature/tracing/src/main/kotlin/.../settings/AboutScreen.kt (i18n URL, OpenInNew icon, @Preview)
 
