@@ -4,7 +4,8 @@ data class OnboardingUiState(
     val currentPage: Int = 0,
     val selectedTier: SetupTier = SetupTier.FULL_DIY,
     val isCompleted: Boolean = false,
-    val wasSkipped: Boolean = false
+    val wasSkipped: Boolean = false,
+    val isReopened: Boolean = false
 )
 
 enum class SetupTier {

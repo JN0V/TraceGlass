@@ -184,12 +184,14 @@ class OnboardingViewModelTest {
     @Nested
     inner class Reopen {
         @Test
-        fun `onReopen resets page to 0`() {
+        fun `onReopen resets page to 0 and sets isReopened`() {
             val vm = createViewModel()
             vm.onPageChanged(2)
             assertEquals(2, vm.uiState.value.currentPage)
+            assertFalse(vm.uiState.value.isReopened)
             vm.onReopen()
             assertEquals(0, vm.uiState.value.currentPage)
+            assertTrue(vm.uiState.value.isReopened)
         }
 
         @Test
@@ -209,12 +211,13 @@ class OnboardingViewModelTest {
         }
 
         @Test
-        fun `onComplete after reopen still marks isCompleted true`() = runTest {
+        fun `onComplete after reopen marks isCompleted true and wasSkipped false`() = runTest {
             val vm = createViewModel()
             vm.onReopen()
             vm.onComplete()
             testDispatcher.scheduler.advanceUntilIdle()
             assertTrue(vm.uiState.value.isCompleted)
+            assertFalse(vm.uiState.value.wasSkipped)
         }
 
         @Test
@@ -224,6 +227,7 @@ class OnboardingViewModelTest {
             vm.onSkip()
             testDispatcher.scheduler.advanceUntilIdle()
             assertEquals(0, repo.setCompletedCount)
+            assertTrue(vm.uiState.value.wasSkipped)
         }
 
         @Test

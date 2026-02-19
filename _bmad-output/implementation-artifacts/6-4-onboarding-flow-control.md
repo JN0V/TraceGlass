@@ -1,6 +1,6 @@
 # Story 6.4: Onboarding Flow Control
 
-Status: review
+Status: done
 
 ## Story
 
@@ -82,24 +82,28 @@ Claude Opus 4.6
 
 - All 3 tasks completed with TDD approach (tests written first, then implementation)
 - `OnboardingMode` enum added (FIRST_TIME, REOPENED) — placed in OnboardingUiState.kt alongside SetupTier
-- `OnboardingViewModel.onReopen()` resets page to 0 and sets `isReopened` flag — onComplete/onSkip skip persistence when reopened
+- `OnboardingViewModel.onReopen()` resets page to 0 and sets `isReopened` in UiState — onComplete/onSkip skip persistence when reopened
 - `OnboardingScreen` accepts `mode` parameter; calls `viewModel.onReopen()` via `LaunchedEffect` when REOPENED
 - Separate "onboarding-reopen" route in NavHost — uses `popBackStack()` on completion instead of navigating to "tracing"
-- "Setup guide" `FilledTonalButton` added to TracingScreen (visible when no overlay image loaded, i.e. before a session)
-- 6 new tests in `Reopen` nested class: page reset, no repository reset, no persistence on complete/skip, isCompleted still triggers, tier preserved
+- Entry point is "Re-open onboarding" in SettingsScreen (Story 7.1 replaced the temporary TracingScreen button)
+- REOPENED mode intentionally skips the interactive walkthrough — user already completed it during first-time onboarding
+- 6 new tests in `Reopen` nested class: page reset + isReopened state, no repository reset, no persistence on complete/skip, isCompleted+wasSkipped assertions, tier preserved
 - Full test suite passes with zero regressions
 
 ### Change Log
 
 - 2026-02-09: Story 6.4 implemented — onboarding flow control with FIRST_TIME/REOPENED modes
+- 2026-02-19: Adversarial review fixes — i18n (PageIndicator + SettingsScreen + AboutScreen), isReopened moved to UiState, @Volatile removed, onSkip default param removed, Role.Button on ListItems, test assertions strengthened, stale completion notes corrected
 
 ### File List
 
 **Modified files:**
-- feature/onboarding/src/main/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingUiState.kt (added OnboardingMode enum)
-- feature/onboarding/src/main/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingViewModel.kt (added onReopen(), isReopened flag, conditional persistence)
-- feature/onboarding/src/main/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingScreen.kt (added mode parameter, LaunchedEffect for onReopen)
-- feature/onboarding/src/test/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingViewModelTest.kt (added Reopen nested class with 6 tests)
-- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingScreen.kt (added onReopenOnboarding callback, "Setup guide" button)
-- app/src/main/kotlin/io/github/jn0v/traceglass/MainActivity.kt (added "onboarding-reopen" route, passed callback to TracingScreen)
+- feature/onboarding/src/main/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingUiState.kt (added OnboardingMode enum, isReopened field)
+- feature/onboarding/src/main/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingViewModel.kt (onReopen() sets isReopened in UiState, removed @Volatile private var)
+- feature/onboarding/src/main/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingScreen.kt (mode parameter, PageIndicator uses stringResource, onSkip no default)
+- feature/onboarding/src/test/kotlin/io/github/jn0v/traceglass/feature/onboarding/OnboardingViewModelTest.kt (Reopen tests: isReopened state, wasSkipped assertions)
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/settings/SettingsScreen.kt (all strings → stringResource, Role.Button on clickable ListItems)
+- feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/settings/AboutScreen.kt (all strings → stringResource)
+- feature/tracing/src/main/res/values/strings.xml (added settings + about string resources)
+- app/src/main/kotlin/io/github/jn0v/traceglass/MainActivity.kt (explicit onSkip for reopen route, design comment)
 

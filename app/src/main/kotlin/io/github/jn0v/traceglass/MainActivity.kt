@@ -119,9 +119,15 @@ private fun TraceGlassNavigation() {
             )
         }
         composable("onboarding-reopen") {
+            // REOPENED mode: walkthrough is intentionally skipped — the user already
+            // completed the interactive camera walkthrough during first-time onboarding.
+            // Both complete and skip navigate back to the previous screen (settings).
             OnboardingScreen(
                 mode = OnboardingMode.REOPENED,
                 onComplete = {
+                    navController.popBackStack()
+                },
+                onSkip = {
                     navController.popBackStack()
                 },
                 onNavigateToGuide = {
