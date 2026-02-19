@@ -35,6 +35,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = koinViewModel(),
     onBack: () -> Unit,
     onReopenOnboarding: () -> Unit = {},
+    onSetupGuide: () -> Unit = {},
     onAbout: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -60,6 +61,7 @@ fun SettingsScreen(
             onBreakReminderToggled = viewModel::onBreakReminderToggled,
             onBreakIntervalChanged = viewModel::onBreakIntervalChanged,
             onReopenOnboarding = onReopenOnboarding,
+            onSetupGuide = onSetupGuide,
             onAbout = onAbout,
             modifier = Modifier.padding(padding)
         )
@@ -73,6 +75,7 @@ private fun SettingsContent(
     onBreakReminderToggled: (Boolean) -> Unit,
     onBreakIntervalChanged: (Int) -> Unit,
     onReopenOnboarding: () -> Unit,
+    onSetupGuide: () -> Unit,
     onAbout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -133,8 +136,16 @@ private fun SettingsContent(
         HorizontalDivider()
 
         ListItem(
+            headlineContent = { Text("Setup guide") },
+            supportingContent = { Text("Marker placement and phone stand tips") },
+            modifier = Modifier.clickable(onClick = onSetupGuide)
+        )
+
+        HorizontalDivider()
+
+        ListItem(
             headlineContent = { Text("Re-open onboarding") },
-            supportingContent = { Text("Review setup guides and tips") },
+            supportingContent = { Text("Review the full onboarding walkthrough") },
             modifier = Modifier.clickable(onClick = onReopenOnboarding)
         )
 

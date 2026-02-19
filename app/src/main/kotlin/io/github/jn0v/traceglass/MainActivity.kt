@@ -103,6 +103,9 @@ private fun TraceGlassNavigation() {
                 onReopenOnboarding = {
                     navController.navigate("onboarding-reopen")
                 },
+                onSetupGuide = {
+                    navController.navigate("setup-guide")
+                },
                 onAbout = {
                     navController.navigate("about")
                 }

@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -34,6 +35,11 @@ class SetupGuideViewModelTest {
         fun `default section is MARKER_GUIDE`() {
             assertEquals(SetupGuideSection.MARKER_GUIDE, vm.uiState.value.selectedSection)
         }
+
+        @Test
+        fun `initial state matches default constructor`() {
+            assertEquals(SetupGuideUiState(), vm.uiState.value)
+        }
     }
 
     @Nested
@@ -49,6 +55,50 @@ class SetupGuideViewModelTest {
             vm.onSectionSelected(SetupGuideSection.MACGYVER_GUIDE)
             vm.onSectionSelected(SetupGuideSection.MARKER_GUIDE)
             assertEquals(SetupGuideSection.MARKER_GUIDE, vm.uiState.value.selectedSection)
+        }
+
+        @Test
+        fun `selecting same section is idempotent`() {
+            val before = vm.uiState.value
+            vm.onSectionSelected(SetupGuideSection.MARKER_GUIDE)
+            assertEquals(before, vm.uiState.value)
+        }
+
+        @Test
+        fun `all enum values are selectable`() {
+            SetupGuideSection.entries.forEach { section ->
+                vm.onSectionSelected(section)
+                assertEquals(section, vm.uiState.value.selectedSection)
+            }
+        }
+    }
+
+    @Nested
+    inner class UrlConstants {
+        @Test
+        fun `marker sheet URL is not blank`() {
+            assertTrue(SetupGuideViewModel.MARKER_SHEET_URL.isNotBlank())
+        }
+
+        @Test
+        fun `stand model URL is not blank`() {
+            assertTrue(SetupGuideViewModel.STAND_MODEL_URL.isNotBlank())
+        }
+
+        @Test
+        fun `marker sheet URL ends with pdf extension`() {
+            assertTrue(SetupGuideViewModel.MARKER_SHEET_URL.endsWith(".pdf"))
+        }
+
+        @Test
+        fun `stand model URL ends with stl extension`() {
+            assertTrue(SetupGuideViewModel.STAND_MODEL_URL.endsWith(".stl"))
+        }
+
+        @Test
+        fun `URLs use https`() {
+            assertTrue(SetupGuideViewModel.MARKER_SHEET_URL.startsWith("https://"))
+            assertTrue(SetupGuideViewModel.STAND_MODEL_URL.startsWith("https://"))
         }
     }
 }

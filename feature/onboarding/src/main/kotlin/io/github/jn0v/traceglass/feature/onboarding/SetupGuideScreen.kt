@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,9 +25,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
@@ -39,15 +46,35 @@ fun SetupGuideScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    SetupGuideContent(
+        uiState = uiState,
+        onSectionSelected = viewModel::onSectionSelected,
+        onBack = onBack
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SetupGuideContent(
+    uiState: SetupGuideUiState,
+    onSectionSelected: (SetupGuideSection) -> Unit,
+    onBack: () -> Unit
+) {
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(uiState.selectedSection) {
+        scrollState.scrollTo(0)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Setup Guide") },
+                title = { Text(stringResource(R.string.guide_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.guide_back)
                         )
                     }
                 }
@@ -59,11 +86,11 @@ fun SetupGuideScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 24.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
         ) {
             SectionSelector(
                 selectedSection = uiState.selectedSection,
-                onSectionSelected = viewModel::onSectionSelected
+                onSectionSelected = onSectionSelected
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -75,7 +102,7 @@ fun SetupGuideScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            ExternalLinksSection()
+            ExternalLinksSection(selectedSection = uiState.selectedSection)
 
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -94,12 +121,14 @@ private fun SectionSelector(
         FilterChip(
             selected = selectedSection == SetupGuideSection.MARKER_GUIDE,
             onClick = { onSectionSelected(SetupGuideSection.MARKER_GUIDE) },
-            label = { Text("Marker Guide") }
+            label = { Text(stringResource(R.string.guide_section_markers)) },
+            modifier = Modifier.defaultMinSize(minHeight = 48.dp)
         )
         FilterChip(
             selected = selectedSection == SetupGuideSection.MACGYVER_GUIDE,
             onClick = { onSectionSelected(SetupGuideSection.MACGYVER_GUIDE) },
-            label = { Text("Stand Setup") }
+            label = { Text(stringResource(R.string.guide_section_stand)) },
+            modifier = Modifier.defaultMinSize(minHeight = 48.dp)
         )
     }
 }
@@ -108,33 +137,34 @@ private fun SectionSelector(
 private fun MarkerGuideContent() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            text = "ArUco Marker Guide",
-            style = MaterialTheme.typography.headlineSmall
+            text = stringResource(R.string.guide_marker_title),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.semantics { heading() }
         )
         Text(
-            text = "TraceGlass uses ArUco markers (small black-and-white grid patterns) for tracking. Place two markers at opposite corners of your drawing area.",
+            text = stringResource(R.string.guide_marker_intro),
             style = MaterialTheme.typography.bodyLarge
         )
 
         StepCard(
             step = "1",
-            title = "Print or display markers",
-            instructions = "Download the marker sheet from the link below, or search for \"ArUco 4x4 marker 0\" and \"ArUco 4x4 marker 1\" online. Print them at about 2 cm each."
+            title = stringResource(R.string.guide_marker_step1_title),
+            instructions = stringResource(R.string.guide_marker_step1_body)
         )
         StepCard(
             step = "2",
-            title = "Place at top corners",
-            instructions = "Cut out markers #0 and #1. Tape them at the top-left and top-right corners of your drawing area, just outside the zone you want to trace. This keeps them visible while you draw."
+            title = stringResource(R.string.guide_marker_step2_title),
+            instructions = stringResource(R.string.guide_marker_step2_body)
         )
         StepCard(
             step = "3",
-            title = "Position your phone",
-            instructions = "Place your phone about 25\u201330 cm above the drawing surface, camera pointing down. It should be high enough to see both markers, but low enough to trace comfortably."
+            title = stringResource(R.string.guide_marker_step3_title),
+            instructions = stringResource(R.string.guide_marker_step3_body)
         )
         StepCard(
             step = "4",
-            title = "Keep markers visible",
-            instructions = "Make sure both markers stay visible to the camera while you draw. Avoid covering them with your hand or paper."
+            title = stringResource(R.string.guide_marker_step4_title),
+            instructions = stringResource(R.string.guide_marker_step4_body)
         )
     }
 }
@@ -151,7 +181,8 @@ private fun StepCard(
         Row(
             modifier = Modifier
                 .padding(16.dp)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) {},
             verticalAlignment = Alignment.Top
         ) {
             Text(
@@ -179,25 +210,26 @@ private fun StepCard(
 private fun MacGyverGuideContent() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            text = "Improvised Phone Stand",
-            style = MaterialTheme.typography.headlineSmall
+            text = stringResource(R.string.guide_stand_title),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.semantics { heading() }
         )
         Text(
-            text = "No tripod? No problem. Use everyday objects to hold your phone about 25\u201330 cm above your drawing surface, camera pointing down.",
+            text = stringResource(R.string.guide_stand_intro),
             style = MaterialTheme.typography.bodyLarge
         )
 
         StandOptionCard(
-            title = "Glass of Water",
-            instructions = "Place a tall glass of water next to your paper. Lean your phone against it, camera pointing down. The glass provides stable support and the water adds weight. Aim for about 25\u201330 cm above the surface."
+            title = stringResource(R.string.guide_stand_glass_title),
+            instructions = stringResource(R.string.guide_stand_glass_body)
         )
         StandOptionCard(
-            title = "Stack of Books",
-            instructions = "Stack 3\u20134 books at the edge of your desk to reach about 25\u201330 cm high. Prop your phone between the top two books, angled downward toward your drawing area."
+            title = stringResource(R.string.guide_stand_books_title),
+            instructions = stringResource(R.string.guide_stand_books_body)
         )
         StandOptionCard(
-            title = "Box or Container",
-            instructions = "Place a box or container (about 25\u201330 cm tall) upside down near your paper. Balance your phone on the edge with the camera hanging over, pointing down. Use a rubber band to secure if needed."
+            title = stringResource(R.string.guide_stand_box_title),
+            instructions = stringResource(R.string.guide_stand_box_body)
         )
     }
 }
@@ -211,7 +243,9 @@ private fun StandOptionCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .padding(16.dp)
+                .semantics(mergeDescendants = true) {}
         ) {
             Text(
                 text = title,
@@ -227,25 +261,56 @@ private fun StandOptionCard(
 }
 
 @Composable
-private fun ExternalLinksSection() {
+private fun ExternalLinksSection(selectedSection: SetupGuideSection) {
+    val uriHandler = LocalUriHandler.current
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "Downloads",
-            style = MaterialTheme.typography.titleMedium
+            text = stringResource(R.string.guide_downloads_title),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.semantics { heading() }
         )
         OutlinedButton(
-            onClick = { },
-            enabled = false,
-            modifier = Modifier.fillMaxWidth()
+            onClick = { uriHandler.openUri(SetupGuideViewModel.MARKER_SHEET_URL) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
         ) {
-            Text("Printable marker sheet \u2014 see docs/aruco-markers-a4.pdf")
+            Text(stringResource(R.string.guide_download_markers))
         }
-        OutlinedButton(
-            onClick = { },
-            enabled = false,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("3D phone stand model \u2014 coming soon")
+        if (selectedSection == SetupGuideSection.MACGYVER_GUIDE) {
+            OutlinedButton(
+                onClick = { uriHandler.openUri(SetupGuideViewModel.STAND_MODEL_URL) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 48.dp)
+            ) {
+                Text(stringResource(R.string.guide_download_stand))
+            }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun MarkerGuidePreview() {
+    MaterialTheme {
+        SetupGuideContent(
+            uiState = SetupGuideUiState(selectedSection = SetupGuideSection.MARKER_GUIDE),
+            onSectionSelected = {},
+            onBack = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun MacGyverGuidePreview() {
+    MaterialTheme {
+        SetupGuideContent(
+            uiState = SetupGuideUiState(selectedSection = SetupGuideSection.MACGYVER_GUIDE),
+            onSectionSelected = {},
+            onBack = {}
+        )
     }
 }

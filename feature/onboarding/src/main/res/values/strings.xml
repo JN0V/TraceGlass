@@ -21,9 +21,9 @@
 
     <!-- MarkerPreparationPage (slide 3) -->
     <string name="onboarding_markers_title">Prepare Your Markers</string>
-    <string name="onboarding_markers_full_diy">Print two ArUco markers (ID #0 and #1) at about 2 cm each. Tape them at the top-left and top-right corners of your drawing area, so your hands never cover them. Prop your phone about 25–30 cm above the surface so the camera sees both markers.</string>
-    <string name="onboarding_markers_semi_equipped">Print the ArUco marker sheet from the setup guide. Cut out markers #0 and #1, tape them at the top-left and top-right corners of your drawing area. Position your phone about 25–30 cm above so both markers stay visible while you draw.</string>
-    <string name="onboarding_markers_full_kit">Print the ArUco marker sheet. Tape markers #0 and #1 at the top-left and top-right corners. Mount your phone on the stand about 25–30 cm above the surface — high enough to see both markers, low enough to trace comfortably.</string>
+    <string name="onboarding_markers_full_diy">Print four ArUco markers (IDs #0\u2013#3) at about 2\u00a0cm each. Tape them at the four corners of your drawing area, so your hands never cover them. Prop your phone about 25\u201330\u00a0cm above the surface so the camera sees all four markers.</string>
+    <string name="onboarding_markers_semi_equipped">Print the ArUco marker sheet from the setup guide. Cut out markers #0\u2013#3, tape them at the four corners of your drawing area. Position your phone about 25\u201330\u00a0cm above so all markers stay visible while you draw.</string>
+    <string name="onboarding_markers_full_kit">Print the ArUco marker sheet. Tape markers #0\u2013#3 at the four corners. Mount your phone on the stand about 25\u201330\u00a0cm above the surface \u2014 high enough to see all four markers, low enough to trace comfortably.</string>
     <string name="onboarding_view_guide">View detailed setup guide</string>
 
     <!-- WalkthroughScreen -->
@@ -43,4 +43,37 @@
     <!-- TooltipOverlay -->
     <string name="walkthrough_tooltip_opacity">Adjust opacity here</string>
     <string name="walkthrough_tooltip_dismiss">Tap anywhere to dismiss</string>
+
+    <!-- SetupGuideScreen -->
+    <string name="guide_title">Setup Guide</string>
+    <string name="guide_back">Back</string>
+    <string name="guide_section_markers">Marker Guide</string>
+    <string name="guide_section_stand">Stand Setup</string>
+
+    <!-- MarkerGuideContent -->
+    <string name="guide_marker_title">ArUco Marker Guide</string>
+    <string name="guide_marker_intro">TraceGlass uses four ArUco markers (small black-and-white grid patterns) placed at the corners of your drawing area for tracking.</string>
+    <string name="guide_marker_step1_title">Print or display markers</string>
+    <string name="guide_marker_step1_body">Download the marker sheet from the link below, or search for \"ArUco 4x4 markers 0–3\" online. Print them at about 2\u00a0cm each.</string>
+    <string name="guide_marker_step2_title">Place at four corners</string>
+    <string name="guide_marker_step2_body">Cut out markers #0, #1, #2, and #3. Tape them at the four corners of your drawing area, just outside the zone you want to trace.</string>
+    <string name="guide_marker_step3_title">Position your phone</string>
+    <string name="guide_marker_step3_body">Place your phone about 25\u201330\u00a0cm above the drawing surface, camera pointing down. It should be high enough to see all four markers, but low enough to trace comfortably.</string>
+    <string name="guide_marker_step4_title">Keep markers visible</string>
+    <string name="guide_marker_step4_body">Make sure all four markers stay visible to the camera while you draw. Avoid covering them with your hand or paper.</string>
+
+    <!-- MacGyverGuideContent -->
+    <string name="guide_stand_title">Improvised Phone Stand</string>
+    <string name="guide_stand_intro">No tripod? No problem. Use everyday objects to hold your phone about 25\u201330\u00a0cm above your drawing surface, camera pointing down.</string>
+    <string name="guide_stand_glass_title">Glass of Water</string>
+    <string name="guide_stand_glass_body">Place a tall glass of water next to your paper. Lean your phone against it, camera pointing down. The glass provides stable support and the water adds weight. Aim for about 25\u201330\u00a0cm above the surface.</string>
+    <string name="guide_stand_books_title">Stack of Books</string>
+    <string name="guide_stand_books_body">Stack 3\u20134 books at the edge of your desk to reach about 25\u201330\u00a0cm high. Prop your phone between the top two books, angled downward toward your drawing area.</string>
+    <string name="guide_stand_box_title">Box or Container</string>
+    <string name="guide_stand_box_body">Place a box or container (about 25\u201330\u00a0cm tall) upside down near your paper. Balance your phone on the edge with the camera hanging over, pointing down. Use a rubber band to secure if needed.</string>
+
+    <!-- ExternalLinksSection -->
+    <string name="guide_downloads_title">Downloads</string>
+    <string name="guide_download_markers">Printable marker sheet (opens browser)</string>
+    <string name="guide_download_stand">3D phone stand model (opens browser)</string>
 </resources>
