@@ -120,9 +120,13 @@ class OverlayTransformCalculator(
             val paper = calibratedPaperCorners
             val allDetected = (0..3).mapNotNull { detected[it] }
             if (paper != null && allDetected.size == 4) {
-                calibratedFocalLength = HomographySolver.estimateFocalLength(
+                val estimatedF = HomographySolver.estimateFocalLength(
                     paper, allDetected, frameWidth / 2f, frameHeight / 2f
                 )
+                if (estimatedF != null) {
+                    calibratedFocalLength = estimatedF
+                    needsRebuildPaperCoords = true
+                }
             }
         }
 
@@ -131,7 +135,7 @@ class OverlayTransformCalculator(
             rebuildPaperCoords(frameWidth, frameHeight)
         }
 
-        val smooth = smoothedCorners!!
+        val smooth = smoothedCorners ?: return lastTransform
         val alpha = if (smoothingFactor >= 1f) 1f else smoothingFactor
 
         // Snapshot previous smooth BEFORE updating (for delta estimation)
@@ -462,6 +466,7 @@ class OverlayTransformCalculator(
      * Without this, falls back to affine delta which accumulates error under tilt.
      */
     fun setFocalLength(f: Float) {
+        require(f > 0f && f.isFinite()) { "Focal length must be positive and finite, got $f" }
         calibratedFocalLength = f
         needsRebuildPaperCoords = true
     }

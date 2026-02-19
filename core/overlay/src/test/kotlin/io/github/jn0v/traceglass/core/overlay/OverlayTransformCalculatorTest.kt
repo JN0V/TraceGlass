@@ -3,9 +3,12 @@ package io.github.jn0v.traceglass.core.overlay
 import io.github.jn0v.traceglass.core.cv.DetectedMarker
 import io.github.jn0v.traceglass.core.cv.MarkerResult
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
@@ -851,6 +854,53 @@ class OverlayTransformCalculatorTest {
                     "Recovery with all 4, corner=$id:"
                 )
             }
+        }
+
+        @Test
+        fun `resetReference from paper-corner mode returns to affine fallback`() {
+            val corners = a4Corners()
+            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
+            val mr = MarkerResult(markersForCorners(corners), 0L, frameW.toInt(), frameH.toInt())
+            val transform = calc.compute(mr, frameW, frameH)
+            assertNotNull(transform.paperCornersFrame, "Should be in paper-corner mode")
+
+            calc.resetReference()
+
+            // After reset, 2 markers should use affine fallback (no paperCornersFrame)
+            val visible = listOf(markerAtPaperCorner(0, corners[0]), markerAtPaperCorner(1, corners[1]))
+            val fallback = calc.compute(
+                MarkerResult(visible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+            )
+            assertNull(fallback.paperCornersFrame, "After reset, should use affine fallback")
+        }
+    }
+
+    @Nested
+    inner class SetFocalLength {
+        @Test
+        fun `rejects zero focal length`() {
+            assertThrows<IllegalArgumentException> { calculator.setFocalLength(0f) }
+        }
+
+        @Test
+        fun `rejects negative focal length`() {
+            assertThrows<IllegalArgumentException> { calculator.setFocalLength(-100f) }
+        }
+
+        @Test
+        fun `rejects NaN focal length`() {
+            assertThrows<IllegalArgumentException> { calculator.setFocalLength(Float.NaN) }
+        }
+
+        @Test
+        fun `rejects infinite focal length`() {
+            assertThrows<IllegalArgumentException> { calculator.setFocalLength(Float.POSITIVE_INFINITY) }
+        }
+
+        @Test
+        fun `accepts valid focal length`() {
+            val calc = OverlayTransformCalculator()
+            calc.setFocalLength(800f) // Should not throw
         }
     }
 }
