@@ -14,11 +14,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.jn0v.traceglass.core.camera.CameraManager
@@ -38,8 +38,6 @@ fun TracingScreen(
     val cameraError by cameraManager.cameraError.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val scope = rememberCoroutineScope()
-
     LaunchedEffect(Unit) {
         viewModel.restoreSession()
     }
@@ -47,7 +45,7 @@ fun TracingScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP -> scope.launch { viewModel.saveSession() }
+                Lifecycle.Event.ON_STOP -> viewModel.saveOnStop()
                 Lifecycle.Event.ON_RESUME -> cameraManager.reapplyZoom()
                 else -> {}
             }
@@ -80,20 +78,20 @@ fun TracingScreen(
     if (uiState.showTimelapseRestoreDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.onTimelapseRestoreDiscard() },
-            title = { Text("Timelapse snapshots found") },
-            text = { Text("${uiState.pendingTimelapseSnapshotCount} snapshots from your previous session were found. What would you like to do?") },
+            title = { Text(stringResource(R.string.timelapse_restore_title)) },
+            text = { Text(pluralStringResource(R.plurals.timelapse_restore_message, uiState.pendingTimelapseSnapshotCount, uiState.pendingTimelapseSnapshotCount)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.onTimelapseRestoreContinue() }) {
-                    Text("Continue Recording")
+                    Text(stringResource(R.string.timelapse_restore_continue))
                 }
             },
             dismissButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = { viewModel.onTimelapseRestoreDiscard() }) {
-                        Text("Discard")
+                        Text(stringResource(R.string.timelapse_restore_discard))
                     }
                     TextButton(onClick = { viewModel.onTimelapseRestoreCompile() }) {
-                        Text("Compile Now")
+                        Text(stringResource(R.string.timelapse_restore_compile))
                     }
                 }
             }
@@ -103,16 +101,16 @@ fun TracingScreen(
     if (uiState.showResumeSessionDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.onResumeSessionDeclined() },
-            title = { Text("Resume session?") },
-            text = { Text("A previous tracing session was found. Resume with the same settings?") },
+            title = { Text(stringResource(R.string.resume_session_title)) },
+            text = { Text(stringResource(R.string.resume_session_message)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.onResumeSessionAccepted() }) {
-                    Text("Resume")
+                    Text(stringResource(R.string.resume_session_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.onResumeSessionDeclined() }) {
-                    Text("New session")
+                    Text(stringResource(R.string.resume_session_decline))
                 }
             }
         )

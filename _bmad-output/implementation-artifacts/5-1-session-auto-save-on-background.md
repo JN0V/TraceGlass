@@ -16,12 +16,12 @@ so that I don't lose my work if I receive a phone call.
 ## Tasks / Subtasks
 
 - [x] Task 1: Create SessionData model (AC: #1)
-  - [x] Data class with 15 fields covering full tracing state
-  - [x] Computed `hasActiveSession` property
+  - [x] Data class with 16 fields covering full tracing state
+  - [x] Computed `hasSavedOverlay` property
 - [x] Task 2: Create SessionRepository interface (AC: #1)
   - [x] `sessionData: Flow<SessionData>`, `save()`, `clear()`
 - [x] Task 3: Implement DataStoreSessionRepository (AC: #1, #2)
-  - [x] 14 typed preference keys
+  - [x] 16 typed preference keys (incl. schema version)
   - [x] Single `dataStore.edit {}` transaction for atomic writes
 - [x] Task 4: Add save triggers in TracingViewModel (AC: #1, #2)
   - [x] Eager save on `onImageSelected()`, `onToggleSession()`
