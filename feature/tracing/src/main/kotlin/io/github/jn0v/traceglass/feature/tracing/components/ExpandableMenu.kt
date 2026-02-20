@@ -22,9 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import io.github.jn0v.traceglass.feature.tracing.R
 import kotlinx.coroutines.delay
 
 data class ExpandableMenuItem(
@@ -48,9 +51,11 @@ fun ExpandableMenu(
         }
     }
 
+    val context = LocalContext.current
+    val menuDescription = context.resources.getQuantityString(R.plurals.menu_options_count, items.size, items.size)
     Column(
         modifier = modifier.semantics {
-            contentDescription = "Menu: ${items.size} options"
+            contentDescription = menuDescription
         },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -106,7 +111,7 @@ fun ExpandableMenu(
         ) {
             Icon(
                 imageVector = Icons.Filled.MoreVert,
-                contentDescription = if (isExpanded) "Close menu" else "Open menu"
+                contentDescription = stringResource(if (isExpanded) R.string.menu_close else R.string.menu_open)
             )
         }
     }

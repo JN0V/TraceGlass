@@ -181,30 +181,34 @@ internal fun TracingContent(
         }
     }
 
+    val compilationFailedText = compilationError?.let { stringResource(R.string.compilation_failed, it) } ?: ""
     LaunchedEffect(compilationError) {
         if (compilationError != null) {
-            snackbarHostState.showSnackbar("Compilation failed: $compilationError")
+            snackbarHostState.showSnackbar(compilationFailedText)
             onCompilationErrorShown()
         }
     }
 
+    val exportSuccessText = stringResource(R.string.export_success)
     LaunchedEffect(exportSuccessMessage) {
         if (exportSuccessMessage != null) {
-            snackbarHostState.showSnackbar(exportSuccessMessage)
+            snackbarHostState.showSnackbar(exportSuccessText)
             onExportSuccessShown()
         }
     }
 
+    val exportFailedText = exportError?.let { stringResource(R.string.export_failed, it) } ?: ""
     LaunchedEffect(exportError) {
         if (exportError != null) {
-            snackbarHostState.showSnackbar("Export failed: $exportError")
+            snackbarHostState.showSnackbar(exportFailedText)
             onExportErrorShown()
         }
     }
 
+    val cameraErrorText = cameraError?.let { stringResource(R.string.camera_error_message, it) } ?: ""
     LaunchedEffect(cameraError) {
         if (cameraError != null) {
-            snackbarHostState.showSnackbar("Camera error: $cameraError")
+            snackbarHostState.showSnackbar(cameraErrorText)
             onCameraErrorShown()
         }
     }
@@ -233,10 +237,11 @@ internal fun TracingContent(
     }
 
     // Post-compilation dialog: Save to Gallery / Share / Discard
+    val exportingDesc = stringResource(R.string.content_desc_exporting)
     if (showPostCompilationDialog) {
         AlertDialog(
             onDismissRequest = onDismissPostCompilationDialog,
-            title = { Text("Timelapse ready!") },
+            title = { Text(stringResource(R.string.timelapse_dialog_title)) },
             text = {
                 if (isExporting) {
                     Row(
@@ -246,12 +251,12 @@ internal fun TracingContent(
                         CircularProgressIndicator(
                             modifier = Modifier
                                 .size(24.dp)
-                                .semantics { contentDescription = "Exporting video" }
+                                .semantics { contentDescription = exportingDesc }
                         )
-                        Text("Saving...")
+                        Text(stringResource(R.string.timelapse_saving))
                     }
                 } else {
-                    Text("What would you like to do with your time-lapse video?")
+                    Text(stringResource(R.string.timelapse_dialog_message))
                 }
             },
             confirmButton = {
@@ -259,7 +264,7 @@ internal fun TracingContent(
                     onClick = onExportToGallery,
                     enabled = !isExporting
                 ) {
-                    Text("Save to Gallery")
+                    Text(stringResource(R.string.timelapse_save_to_gallery))
                 }
             },
             dismissButton = {
@@ -268,13 +273,13 @@ internal fun TracingContent(
                         onClick = onDiscard,
                         enabled = !isExporting
                     ) {
-                        Text("Discard")
+                        Text(stringResource(R.string.timelapse_discard))
                     }
                     TextButton(
                         onClick = onShare,
                         enabled = !isExporting
                     ) {
-                        Text("Share")
+                        Text(stringResource(R.string.timelapse_share))
                     }
                 }
             }
@@ -285,16 +290,16 @@ internal fun TracingContent(
     if (showUnlockConfirmDialog) {
         AlertDialog(
             onDismissRequest = onDismissUnlockDialog,
-            title = { Text("Unlock overlay?") },
-            text = { Text("Your current position will be adjustable again.") },
+            title = { Text(stringResource(R.string.unlock_dialog_title)) },
+            text = { Text(stringResource(R.string.unlock_dialog_message)) },
             confirmButton = {
                 TextButton(onClick = onConfirmUnlock) {
-                    Text("Unlock")
+                    Text(stringResource(R.string.unlock_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = onDismissUnlockDialog) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.dialog_cancel))
                 }
             }
         )
@@ -334,7 +339,7 @@ internal fun TracingContent(
                 val identityValues = remember { MatrixUtils.identity() }
                 Image(
                     painter = rememberAsyncImagePainter(model = overlayImageUri),
-                    contentDescription = "Overlay reference image",
+                    contentDescription = stringResource(R.string.content_desc_overlay_image),
                     modifier = Modifier
                         .fillMaxSize()
                         .drawWithContent {
@@ -429,7 +434,7 @@ internal fun TracingContent(
                     else
                         MaterialTheme.colorScheme.primary
                 ) {
-                    Text(if (isSessionActive) "Stop" else "Start")
+                    Text(stringResource(if (isSessionActive) R.string.session_stop else R.string.session_start))
                 }
 
                 // Timelapse controls — only visible when session is active
@@ -462,13 +467,13 @@ internal fun TracingContent(
                         if (hasFlashlight) {
                             add(ExpandableMenuItem(
                                 icon = if (isTorchOn) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
-                                label = if (isTorchOn) "Turn off flashlight" else "Turn on flashlight",
+                                label = if (isTorchOn) stringResource(R.string.flashlight_turn_off) else stringResource(R.string.flashlight_turn_on),
                                 onClick = onToggleTorch
                             ))
                         }
                         add(ExpandableMenuItem(
                             icon = Icons.Filled.Add,
-                            label = "Pick reference image",
+                            label = stringResource(R.string.pick_reference_image),
                             onClick = onPickImage
                         ))
                     },
@@ -488,7 +493,7 @@ internal fun TracingContent(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Add,
-                        contentDescription = "Pick reference image"
+                        contentDescription = stringResource(R.string.pick_reference_image)
                     )
                 }
             }
@@ -546,7 +551,7 @@ private fun TimelapseControls(
         ) {
             if (isCompiling) {
                 Text(
-                    text = "Compiling ${(compilationProgress * 100).toInt()}%",
+                    text = stringResource(R.string.compiling_progress, (compilationProgress * 100).toInt()),
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                 )
@@ -566,14 +571,14 @@ private fun TimelapseControls(
                         if (isRecording) {
                             Icon(
                                 imageVector = Icons.Filled.FiberManualRecord,
-                                contentDescription = "Recording",
+                                contentDescription = stringResource(R.string.content_desc_recording),
                                 tint = Color.Red,
                                 modifier = Modifier.size(12.dp)
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Filled.Pause,
-                                contentDescription = "Paused",
+                                contentDescription = stringResource(R.string.content_desc_paused),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(12.dp)
                             )
@@ -591,7 +596,7 @@ private fun TimelapseControls(
                         ) {
                             Icon(
                                 imageVector = if (isRecording) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = if (isRecording) "Pause timelapse" else "Resume timelapse"
+                                contentDescription = stringResource(if (isRecording) R.string.content_desc_pause_timelapse else R.string.content_desc_resume_timelapse)
                             )
                         }
                         // Stop button
@@ -601,7 +606,7 @@ private fun TimelapseControls(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Stop,
-                                contentDescription = "Stop timelapse"
+                                contentDescription = stringResource(R.string.content_desc_stop_timelapse)
                             )
                         }
                     } else {
@@ -612,7 +617,7 @@ private fun TimelapseControls(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.FiberManualRecord,
-                                contentDescription = "Start timelapse",
+                                contentDescription = stringResource(R.string.content_desc_start_timelapse),
                                 tint = Color.Red
                             )
                         }
@@ -635,17 +640,17 @@ internal fun PermissionDeniedContent(onRequestPermission: () -> Unit = {}) {
             modifier = Modifier.padding(32.dp)
         ) {
             Text(
-                text = "Camera permission required",
+                text = stringResource(R.string.camera_permission_title),
                 style = MaterialTheme.typography.headlineSmall
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "TraceGlass needs camera access to display your drawing surface. No images are stored or sent anywhere.",
+                text = stringResource(R.string.camera_permission_message),
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(modifier = Modifier.height(24.dp))
             Button(onClick = onRequestPermission) {
-                Text("Grant Permission")
+                Text(stringResource(R.string.grant_permission))
             }
         }
     }

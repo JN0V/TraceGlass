@@ -11,7 +11,9 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import io.github.jn0v.traceglass.feature.tracing.R
 
 private val TealAccent = Color(0xFF009688)
 
@@ -32,7 +34,7 @@ internal fun LockButton(
         ) {
             Icon(
                 imageVector = Icons.Filled.Lock,
-                contentDescription = "Unlock overlay — currently locked"
+                contentDescription = stringResource(R.string.content_desc_locked_overlay)
             )
         }
     } else {
@@ -42,7 +44,7 @@ internal fun LockButton(
         ) {
             Icon(
                 imageVector = Icons.Outlined.LockOpen,
-                contentDescription = "Lock overlay position"
+                contentDescription = stringResource(R.string.lock_overlay_position)
             )
         }
     }

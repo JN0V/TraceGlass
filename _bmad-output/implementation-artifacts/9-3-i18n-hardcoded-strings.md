@@ -1,6 +1,6 @@
 # Story 9.3: Internationalization of Hardcoded UI Strings
 
-Status: ready-for-dev
+Status: completed
 
 ## Story
 
@@ -22,23 +22,23 @@ So that the app can be translated to other languages in the future.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Audit all hardcoded strings in feature:tracing (AC: #1)
-  - [ ] 1.1 TracingContent.kt — timelapse dialog (lines 241-279)
-  - [ ] 1.2 TracingContent.kt — unlock dialog (lines 290-299)
-  - [ ] 1.3 TracingContent.kt — "Grant Permission" button (line 650)
-  - [ ] 1.4 VisualModeControls.kt — "Inverted" chip label (line 38)
-  - [ ] 1.5 TrackingIndicator.kt — "Tracking" / "Lost" text (lines 56-58)
-- [ ] Task 2: Create string resources in feature:tracing strings.xml (AC: #1-4)
-  - [ ] 2.1 Add all strings to `feature/tracing/src/main/res/values/strings.xml`
-  - [ ] 2.2 Use descriptive keys (e.g., `timelapse_dialog_title`, `unlock_dialog_message`)
-  - [ ] 2.3 Replace all `Text("...")` with `Text(stringResource(R.string.xxx))`
-- [ ] Task 3: Audit other modules for hardcoded strings
-  - [ ] 3.1 IntentVideoSharer.kt — "Share time-lapse" chooser title
-  - [ ] 3.2 Any other modules with user-facing text
-- [ ] Task 4: Update tests if they assert on hardcoded text (AC: #5)
-  - [ ] 4.1 Check androidTest files (ExpandableMenuTest, OpacityFabTest) for text matchers
-  - [ ] 4.2 Update any `hasText("...")` assertions to use string resource references
-- [ ] Task 5: Run full test suite, verify no regressions (AC: #5)
+- [x] Task 1: Audit all hardcoded strings in feature:tracing (AC: #1)
+  - [x] 1.1 TracingContent.kt — timelapse dialog (lines 241-279)
+  - [x] 1.2 TracingContent.kt — unlock dialog (lines 290-299)
+  - [x] 1.3 TracingContent.kt — "Grant Permission" button (line 650)
+  - [x] 1.4 VisualModeControls.kt — "Inverted" chip label (line 38)
+  - [x] 1.5 TrackingIndicator.kt — "Tracking" / "Lost" text (lines 56-58)
+- [x] Task 2: Create string resources in feature:tracing strings.xml (AC: #1-4)
+  - [x] 2.1 Add all strings to `feature/tracing/src/main/res/values/strings.xml`
+  - [x] 2.2 Use descriptive keys (e.g., `timelapse_dialog_title`, `unlock_dialog_message`)
+  - [x] 2.3 Replace all `Text("...")` with `Text(stringResource(R.string.xxx))`
+- [x] Task 3: Audit other modules for hardcoded strings
+  - [x] 3.1 IntentVideoSharer.kt — "Share time-lapse" chooser title
+  - [x] 3.2 Any other modules with user-facing text
+- [x] Task 4: Update tests if they assert on hardcoded text (AC: #5)
+  - [x] 4.1 Check androidTest files (ExpandableMenuTest, OpacityFabTest) for text matchers
+  - [x] 4.2 No changes needed — androidTests resolve string resources on device to identical values
+- [x] Task 5: Run full test suite, verify no regressions (AC: #5)
 
 ## Dev Notes
 
@@ -91,9 +91,39 @@ From Story 6.2 and 7.1-7.2 adversarial reviews: i18n was already addressed in on
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+N/A — no runtime debugging needed for string extraction
 
 ### Completion Notes List
+- Extracted 15 strings from spec inventory + 30 additional user-facing strings discovered during audit
+- Additional strings beyond spec: session Start/Stop, flashlight labels, camera permission screen, content descriptions (recording, paused, timelapse controls), compilation/export error snackbars, menu open/close, opacity percentage, lock button descriptions, color tint labels
+- Created `feature/timelapse/src/main/res/values/strings.xml` (new file) for share chooser title
+- Used `@StringRes` annotated extension property for ColorTint enum labels
+- `Modifier.semantics{}` is non-composable — extracted `stringResource()` calls before semantics blocks
+- No test changes needed — androidTests resolve string resources identically on device
+- Format strings use `%1$s` for strings, `%1$d%%` for percentages (standard Android patterns)
+
+### Adversarial Review Fixes Applied
+- F1: LaunchedEffect guards restored to original param checks (clearer intent)
+- F3: `menu_options_count` converted to `<plurals>` for correct singular/plural
+- F6/F11: `percentage_format` marked `translatable="false"` (pure formatting)
+- F7: Extracted `"Video saved to Movies/TraceGlass/"` from ViewModel to `export_success` string resource
+- F8: Moved `exportingDesc` to composable scope level for robust accessibility
+- F9: Renamed `lock_unlock_currently_locked` → `content_desc_locked_overlay` (consistent naming)
+- Skipped F2 (separate Discard keys intentional for context-sensitive translation)
+- Skipped F4 (R import auto-resolved from package)
+- Skipped F5 (Unicode ellipsis intentional — better typography)
+- Skipped F10 (`dialog_cancel` is standard reusable pattern)
 
 ### File List
+- `feature/tracing/src/main/res/values/strings.xml` (modified — 45 new string resources)
+- `feature/tracing/src/main/kotlin/.../TracingContent.kt` (modified)
+- `feature/tracing/src/main/kotlin/.../components/VisualModeControls.kt` (modified)
+- `feature/tracing/src/main/kotlin/.../components/TrackingIndicator.kt` (modified)
+- `feature/tracing/src/main/kotlin/.../components/ExpandableMenu.kt` (modified)
+- `feature/tracing/src/main/kotlin/.../components/OpacityFab.kt` (modified)
+- `feature/tracing/src/main/kotlin/.../components/LockButton.kt` (modified)
+- `feature/timelapse/src/main/res/values/strings.xml` (new)
+- `feature/timelapse/src/main/kotlin/.../IntentVideoSharer.kt` (modified)
