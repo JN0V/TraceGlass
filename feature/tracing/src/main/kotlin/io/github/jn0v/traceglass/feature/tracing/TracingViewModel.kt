@@ -20,7 +20,7 @@ import io.github.jn0v.traceglass.core.timelapse.CompilationResult
 import io.github.jn0v.traceglass.core.timelapse.ExportResult
 import io.github.jn0v.traceglass.core.timelapse.TimelapseSession
 import io.github.jn0v.traceglass.core.timelapse.TimelapseState
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +37,13 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+
+/** Restore lifecycle state machine — uses data objects (singletons) for AtomicReference identity. */
+private sealed interface RestoreState {
+    data object Idle : RestoreState
+    data object Loading : RestoreState
+    data object Completed : RestoreState
+}
 
 class TracingViewModel(
     private val flashlightController: FlashlightController,
@@ -74,8 +81,8 @@ class TracingViewModel(
     private var breakTimerJob: Job? = null
     private var debounceSaveJob: Job? = null
 
-    private val restoreAttempted = AtomicBoolean(false)
-    private val restoreCompleted = AtomicBoolean(false)
+    private val restoreState = AtomicReference<RestoreState>(RestoreState.Idle)
+    private val pendingRestoreData = AtomicReference<SessionData?>(null)
     private var previousTransform: OverlayTransform = OverlayTransform.IDENTITY
     private var manualOffset: Offset = Offset.Zero
     private var manualScaleFactor: Float = 1f
@@ -418,6 +425,7 @@ class TracingViewModel(
     }
 
     private fun performExport(shareAfter: Boolean) {
+        if (_uiState.value.isExporting) return
         val exporter = videoExporter ?: return
         val videoPath = _uiState.value.compiledVideoPath ?: return
         val videoFile = java.io.File(videoPath)
@@ -523,7 +531,7 @@ class TracingViewModel(
     }
 
     suspend fun saveSession() {
-        if (!restoreCompleted.get()) return
+        if (restoreState.get() !is RestoreState.Completed) return
         val state = _uiState.value
 
         withContext(NonCancellable) {
@@ -551,31 +559,31 @@ class TracingViewModel(
     }
 
     suspend fun restoreSession() {
-        if (!restoreAttempted.compareAndSet(false, true)) return
+        if (!restoreState.compareAndSet(RestoreState.Idle, RestoreState.Loading)) return
         try {
             val data = sessionRepository.sessionData.first()
 
             if (!data.hasSavedOverlay) {
-                restoreCompleted.set(true)
+                restoreState.set(RestoreState.Completed)
                 return
             }
             // Store pending restore data and show dialog
-            pendingRestoreData = data
+            pendingRestoreData.set(data)
 
             _uiState.update { it.copy(showResumeSessionDialog = true) }
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            // Transition back to Idle so retry works after cancellation
+            restoreState.set(RestoreState.Idle)
             throw e
         } catch (e: Exception) {
             // DataStore read failed (corruption, I/O) — allow retry next time
-            restoreAttempted.set(false)
-            restoreCompleted.set(true)
+            android.util.Log.w("TracingViewModel", "restoreSession failed, will allow retry", e)
+            restoreState.set(RestoreState.Idle)
         }
     }
 
-    @Volatile private var pendingRestoreData: SessionData? = null
-
     fun onResumeSessionAccepted() {
-        val data = pendingRestoreData ?: return
+        val data = pendingRestoreData.getAndSet(null) ?: return
         val imageUri = data.imageUri?.let { Uri.parse(it) }
 
         manualOffset = Offset(data.overlayOffsetX, data.overlayOffsetY)
@@ -597,16 +605,15 @@ class TracingViewModel(
                 viewportPanY = data.viewportPanY
             )
         }
-        pendingRestoreData = null
-        restoreCompleted.set(true)
+        restoreState.set(RestoreState.Completed)
         updateOverlayFromCombined()
         restartBreakTimer()
         restoreTimelapseState(data)
     }
 
     fun onResumeSessionDeclined() {
-        pendingRestoreData = null
-        restoreCompleted.set(true)
+        pendingRestoreData.set(null)
+        restoreState.set(RestoreState.Completed)
         _uiState.update { it.copy(showResumeSessionDialog = false) }
         resetTracking()
         viewModelScope.launch {
