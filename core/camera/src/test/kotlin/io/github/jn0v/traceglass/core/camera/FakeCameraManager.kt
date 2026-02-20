@@ -32,4 +32,12 @@ class FakeCameraManager : CameraManager {
     }
 
     override fun reapplyZoom() {}
+
+    var closeCalled = false
+        private set
+
+    override fun close() {
+        closeCalled = true
+        unbind()
+    }
 }

@@ -52,7 +52,7 @@ class TracingViewModel(
     private val sessionRepository: SessionRepository,
     private val settingsRepository: SettingsRepository,
     private val cameraManager: CameraManager? = null,
-    private val frameAnalyzer: FrameAnalyzer? = null,
+    internal val frameAnalyzer: FrameAnalyzer? = null,
     private val timelapseOps: TimelapseOperations? = null,
     private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
     private val mainDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Main

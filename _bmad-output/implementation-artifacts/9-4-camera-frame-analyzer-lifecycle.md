@@ -1,6 +1,6 @@
 # Story 9.4: Camera & FrameAnalyzer Lifecycle Management
 
-Status: ready-for-dev
+Status: completed
 
 ## Story
 
@@ -20,25 +20,24 @@ So that executor threads and coroutine scopes do not leak across activity recrea
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Implement `Closeable` on CameraXManager (AC: #1, #3)
-  - [ ] 1.1 Add `Closeable` interface to `CameraXManager`
-  - [ ] 1.2 In `close()`: call `analysisExecutor.shutdown()` after `unbindAll()`
-  - [ ] 1.3 Keep executor alive across bind/unbind cycles (only shutdown on close)
-  - [ ] 1.4 Update `unbind()` to NOT shutdown the executor (current behavior, keep it)
-  - [ ] 1.5 Update Koin CameraModule: change from `single` to `scoped` or ensure `close()` is called
-- [ ] Task 2: Fix FrameAnalyzer scope lifecycle (AC: #2)
-  - [ ] 2.1 Option A: Move snapshotScope creation to a start/stop pattern tied to ViewModel lifecycle
-  - [ ] 2.2 Option B: Have TracingViewModel.onCleared() explicitly call frameAnalyzer.close()
-  - [ ] 2.3 Option C: Change Koin registration from `single` to `factory` so each ViewModel gets a fresh instance
-  - [ ] 2.4 Verify `close()` is called in TracingViewModel.onCleared() (line 130 already does this — verify it works)
-- [ ] Task 3: Verify Koin scoping is correct (AC: #1, #2)
-  - [ ] 3.1 Review CameraModule DI registration: is CameraXManager a singleton? Should it be?
-  - [ ] 3.2 Review TracingModule: is FrameAnalyzer a singleton? Should it be factory-scoped?
-  - [ ] 3.3 Ensure no circular dependency between camera and tracing modules
-- [ ] Task 4: Add tests for lifecycle cleanup (AC: #4)
-  - [ ] 4.1 Test: CameraXManager.close() shuts down executor
-  - [ ] 4.2 Test: FrameAnalyzer.close() cancels snapshotScope
-  - [ ] 4.3 Run full test suite
+- [x] Task 1: Implement `Closeable` on CameraXManager (AC: #1, #3)
+  - [x] 1.1 Add `Closeable` interface to `CameraManager` interface (inherited by `CameraXManager`)
+  - [x] 1.2 In `close()`: call `unbind()` then `analysisExecutor.shutdown()`
+  - [x] 1.3 Keep executor alive across bind/unbind cycles (only shutdown on close)
+  - [x] 1.4 Update `unbind()` to NOT shutdown the executor (existing behavior preserved)
+  - [x] 1.5 Kept `single` in CameraModule (per recommended approach — one thread for app lifetime is acceptable)
+- [x] Task 2: Fix FrameAnalyzer scope lifecycle (AC: #2)
+  - [x] 2.3 Option C selected: Changed Koin registration from `single` to `factory`
+  - [x] 2.4 Verified `close()` is called in TracingViewModel.onCleared() (line 136)
+  - [x] Extra: Changed TracingScreen to get FrameAnalyzer from ViewModel (not separate koinInject) to avoid factory creating two instances
+- [x] Task 3: Verify Koin scoping is correct (AC: #1, #2)
+  - [x] 3.1 CameraXManager stays `single` — one thread, acceptable for app lifetime
+  - [x] 3.2 FrameAnalyzer changed to `factory` — each ViewModel gets fresh instance with its own scope
+  - [x] 3.3 No circular dependency found between camera and tracing modules
+- [x] Task 4: Add tests for lifecycle cleanup (AC: #4)
+  - [x] 4.1 Test: CameraXManager.close() shuts down executor (CameraXManagerCloseTest)
+  - [x] 4.2 Test: FrameAnalyzer.close() cancels snapshotScope (FrameAnalyzerTest.Lifecycle)
+  - [x] 4.3 Full test suite passes (333 tasks, 0 failures)
 
 ## Dev Notes
 
@@ -91,9 +90,34 @@ From Story 1.4: CameraXManager was created with the single-thread executor patte
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+N/A — no debugging issues encountered.
 
 ### Completion Notes List
+- CameraManager interface now extends Closeable; CameraXManager.close() shuts down executor after unbind
+- FrameAnalyzer Koin registration changed from `single` to `factory` — critical fix for scope leak
+- TracingScreen no longer injects FrameAnalyzer separately; uses viewModel.frameAnalyzer instead
+- TracingViewModel.frameAnalyzer visibility changed from private to internal for Screen access
+- TracingContent.frameAnalyzer parameter type changed to nullable (FrameAnalyzer?)
+- FakeCameraManager and FakeCameraManagerForTest updated with close() implementations
+- 6 new tests: 4 in CameraXManagerCloseTest, 2 in FrameAnalyzerTest.Lifecycle
+- Adversarial review: added isClosed guard (use-after-close), null-frameAnalyzer log warning, improved test assertions
+
+## Review Notes
+- Adversarial review completed
+- Findings: 10 total, 3 fixed, 7 skipped (noise/out-of-scope)
+- Resolution approach: auto-fix real findings
 
 ### File List
+- `core/camera/src/main/kotlin/.../CameraManager.kt` — added Closeable
+- `core/camera/src/main/kotlin/.../impl/CameraXManager.kt` — added close()
+- `core/camera/src/test/kotlin/.../FakeCameraManager.kt` — added close()
+- `core/camera/src/test/kotlin/.../CameraXManagerCloseTest.kt` — NEW: 3 lifecycle tests
+- `feature/tracing/src/main/kotlin/.../di/TracingModule.kt` — FrameAnalyzer: single → factory
+- `feature/tracing/src/main/kotlin/.../TracingViewModel.kt` — frameAnalyzer: private → internal
+- `feature/tracing/src/main/kotlin/.../TracingScreen.kt` — removed koinInject() for FrameAnalyzer
+- `feature/tracing/src/main/kotlin/.../TracingContent.kt` — frameAnalyzer param nullable
+- `feature/tracing/src/test/kotlin/.../FrameAnalyzerTest.kt` — added Lifecycle nested class (2 tests)
+- `feature/tracing/src/test/kotlin/.../TracingViewModelTest.kt` — FakeCameraManagerForTest: added close()

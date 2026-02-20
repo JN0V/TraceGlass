@@ -29,9 +29,9 @@ import org.koin.androidx.compose.koinViewModel
 fun TracingScreen(
     viewModel: TracingViewModel = koinViewModel(),
     cameraManager: CameraManager = koinInject(),
-    frameAnalyzer: FrameAnalyzer = koinInject(),
     onNavigateToSettings: () -> Unit = {}
 ) {
+    val frameAnalyzer = viewModel.frameAnalyzer
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // Collect render matrix as a separate State — read only in draw phase to avoid recomposition
     val renderMatrixState = viewModel.renderMatrix.collectAsStateWithLifecycle()
@@ -54,9 +54,11 @@ fun TracingScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(frameAnalyzer) {
-        frameAnalyzer.latestResult.collect { result ->
-            viewModel.onMarkerResultReceived(result)
+    if (frameAnalyzer != null) {
+        LaunchedEffect(frameAnalyzer) {
+            frameAnalyzer.latestResult.collect { result ->
+                viewModel.onMarkerResultReceived(result)
+            }
         }
     }
 

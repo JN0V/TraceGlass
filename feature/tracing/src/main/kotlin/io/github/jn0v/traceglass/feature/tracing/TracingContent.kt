@@ -3,6 +3,7 @@ package io.github.jn0v.traceglass.feature.tracing
 import android.content.Context
 import android.content.ContextWrapper
 import android.net.Uri
+import android.util.Log
 import android.view.WindowManager
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
@@ -84,7 +85,7 @@ import io.github.jn0v.traceglass.feature.tracing.components.VisualModeControls
 @Composable
 internal fun TracingContent(
     cameraManager: CameraManager,
-    frameAnalyzer: FrameAnalyzer,
+    frameAnalyzer: FrameAnalyzer?,
     isTorchOn: Boolean,
     hasFlashlight: Boolean,
     onToggleTorch: () -> Unit,
@@ -326,6 +327,9 @@ internal fun TracingContent(
             AndroidView(
                 factory = { context ->
                     PreviewView(context).also { previewView ->
+                        if (frameAnalyzer == null) {
+                            Log.w("TracingContent", "frameAnalyzer is null — marker detection disabled")
+                        }
                         cameraManager.bindPreview(lifecycleOwner, previewView.surfaceProvider, frameAnalyzer)
                     }
                 },

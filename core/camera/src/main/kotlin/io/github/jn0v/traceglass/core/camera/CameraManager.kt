@@ -4,8 +4,9 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.flow.StateFlow
+import java.io.Closeable
 
-interface CameraManager {
+interface CameraManager : Closeable {
     val isCameraReady: StateFlow<Boolean>
     val cameraError: StateFlow<String?>
     val focalLengthPixels: StateFlow<Float?>
