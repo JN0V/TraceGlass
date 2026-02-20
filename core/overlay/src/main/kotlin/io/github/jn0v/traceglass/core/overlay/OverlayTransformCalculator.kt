@@ -22,8 +22,10 @@ import kotlin.math.sqrt
  *
  * **Thread safety:** This class is **not** thread-safe. All calls to [compute],
  * [computeSmoothed], [setFocalLength], and [resetReference] must be made from
- * the same thread (typically the CameraX analysis callback thread). The caller
- * is responsible for ensuring sequential access.
+ * the same thread. In the current architecture, all calls run on the main thread:
+ * marker results are collected via `StateFlow` in a composable `LaunchedEffect`,
+ * and `setFocalLength` is called from `viewModelScope`. The caller is responsible
+ * for ensuring sequential access if the threading model changes.
  */
 class OverlayTransformCalculator(
     private val smoothingFactor: Float = 0.12f
@@ -33,6 +35,10 @@ class OverlayTransformCalculator(
     private var smoothedCorners: MutableMap<Int, Pair<Float, Float>>? = null
     private var referencePaperAR: Float = 0f
     private var calibratedFocalLength: Float? = null
+    // True when calibratedFocalLength was set via setFocalLength() (external source
+    // like CameraX intrinsics), as opposed to auto-estimated from marker geometry.
+    // External values survive resetReference() since camera intrinsics don't change.
+    private var isFocalLengthExternal: Boolean = false
     // Rectangular paper coords for constrained homography (paper-size agnostic)
     private var calibratedPaperCorners: List<Pair<Float, Float>>? = null
     private var needsRebuildPaperCoords: Boolean = false
@@ -473,8 +479,12 @@ class OverlayTransformCalculator(
     fun setFocalLength(f: Float) {
         require(f > 0f && f.isFinite()) { "Focal length must be positive and finite, got $f" }
         calibratedFocalLength = f
+        isFocalLengthExternal = true
         needsRebuildPaperCoords = true
     }
+
+    /** Exposed for test verification only. */
+    val calibratedFocalLengthForTest: Float? get() = calibratedFocalLength
 
     fun resetReference() {
         referenceSpacing = null
@@ -485,12 +495,21 @@ class OverlayTransformCalculator(
         referenceCorners = null
         smoothedCorners = null
         referencePaperAR = 0f
-        calibratedFocalLength = null
         calibratedPaperCorners = null
-        needsRebuildPaperCoords = false
         isReferenceRectangular = false
         prevSmooth = null
         lastTransform = OverlayTransform.IDENTITY
+
+        // Preserve externally-provided focal length (e.g., CameraX intrinsics) since
+        // camera hardware properties don't change when tracking is reset.
+        // Auto-estimated focal lengths are cleared since they depend on the old reference.
+        if (isFocalLengthExternal) {
+            // Keep calibratedFocalLength; flag rebuild for when new reference is established
+            needsRebuildPaperCoords = true
+        } else {
+            calibratedFocalLength = null
+            needsRebuildPaperCoords = false
+        }
     }
 
     /**

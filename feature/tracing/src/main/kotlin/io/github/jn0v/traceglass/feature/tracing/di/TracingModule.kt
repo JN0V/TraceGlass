@@ -11,6 +11,6 @@ import org.koin.dsl.module
 val tracingModule = module {
     single { OverlayTransformCalculator() }
     single { FrameAnalyzer(markerDetector = get()) }
-    viewModel { TracingViewModel(flashlightController = get(), transformCalculator = get(), sessionRepository = get(), settingsRepository = get(), snapshotStorage = get(), frameAnalyzer = get(), timelapseCompiler = get(), videoExporter = get(), videoSharer = get(), cacheDir = androidContext().cacheDir) }
+    viewModel { TracingViewModel(flashlightController = get(), transformCalculator = get(), sessionRepository = get(), settingsRepository = get(), cameraManager = get(), snapshotStorage = get(), frameAnalyzer = get(), timelapseCompiler = get(), videoExporter = get(), videoSharer = get(), cacheDir = androidContext().cacheDir) }
     viewModel { SettingsViewModel(get()) }
 }

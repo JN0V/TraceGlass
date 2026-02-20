@@ -109,5 +109,5 @@ development_status:
   8-1-perspective-correction: done # Homography solver, MatrixUtils, paper-mapping rendering, settings toggle
   8-2-paper-size-agnostic-4-marker-reference: done # 4 ArUco markers, auto-f estimation, AR correction, setFocalLength API
   8-3-3-marker-constrained-homography: done # Newton-Raphson constrained H, delta fallback hierarchy, sub-5px at 20°
-  8-4-camerax-intrinsics-integration: ready-for-dev # Wire CameraX focal length → setFocalLength()
+  8-4-camerax-intrinsics-integration: review # Wire CameraX focal length → setFocalLength()
   epic-8-retrospective: optional

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 interface CameraManager {
     val isCameraReady: StateFlow<Boolean>
     val cameraError: StateFlow<String?>
+    val focalLengthPixels: StateFlow<Float?>
     fun bindPreview(
         lifecycleOwner: LifecycleOwner,
         surfaceProvider: Preview.SurfaceProvider,
