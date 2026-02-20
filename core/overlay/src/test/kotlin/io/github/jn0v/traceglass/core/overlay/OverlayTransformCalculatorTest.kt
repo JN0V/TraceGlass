@@ -9,6 +9,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
@@ -857,6 +860,122 @@ class OverlayTransformCalculatorTest {
         }
 
         @Test
+        fun `1-marker translation delta updates all corners consistently`() {
+            val corners = a4Corners()
+            val calc = initCalculator(corners)
+
+            val allFour = calc.compute(
+                MarkerResult(markersForCorners(corners), 0L, frameW.toInt(), frameH.toInt()),
+                frameW, frameH
+            )
+            val beforeCorners = allFour.paperCornersFrame!!
+
+            val moved = corners.map { (x, y) -> Pair(x + 20f, y + 10f) }
+            val oneVisible = markersForCorners(moved).filter { it.id == 0 }
+            val result = calc.compute(
+                MarkerResult(oneVisible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+            )
+            val afterCorners = result.paperCornersFrame!!
+
+            assertEquals(4, afterCorners.size, "All 4 corners must be present")
+            for (id in 0..3) {
+                val dx = afterCorners[id].first - beforeCorners[id].first
+                val dy = afterCorners[id].second - beforeCorners[id].second
+                assertTrue(abs(dx - 20f) < 2f,
+                    "Corner $id dx=${dx} should be ~20")
+                assertTrue(abs(dy - 10f) < 2f,
+                    "Corner $id dy=${dy} should be ~10")
+            }
+        }
+
+        @Test
+        fun `2-marker similarity delta updates all corners consistently`() {
+            val corners = a4Corners()
+            val calc = initCalculator(corners)
+
+            val allFour = calc.compute(
+                MarkerResult(markersForCorners(corners), 0L, frameW.toInt(), frameH.toInt()),
+                frameW, frameH
+            )
+            val beforeCorners = allFour.paperCornersFrame!!
+
+            val moved = corners.map { (x, y) -> Pair(x + 15f, y + 8f) }
+            val twoVisible = markersForCorners(moved).filter { it.id in setOf(0, 1) }
+            val result = calc.compute(
+                MarkerResult(twoVisible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+            )
+            val afterCorners = result.paperCornersFrame!!
+
+            assertEquals(4, afterCorners.size, "All 4 corners must be present")
+            // With pure translation, similarity delta should apply uniformly
+            for (id in 0..3) {
+                val dx = afterCorners[id].first - beforeCorners[id].first
+                val dy = afterCorners[id].second - beforeCorners[id].second
+                assertTrue(abs(dx - 15f) < 2f,
+                    "2-marker: corner $id dx=${dx} should be ~15")
+                assertTrue(abs(dy - 8f) < 2f,
+                    "2-marker: corner $id dy=${dy} should be ~8")
+            }
+        }
+
+        @Test
+        fun `3-marker affine delta updates all corners consistently`() {
+            val corners = a4Corners()
+            val calc = initCalculator(corners)
+
+            val allFour = calc.compute(
+                MarkerResult(markersForCorners(corners), 0L, frameW.toInt(), frameH.toInt()),
+                frameW, frameH
+            )
+            val beforeCorners = allFour.paperCornersFrame!!
+
+            val moved = corners.map { (x, y) -> Pair(x + 25f, y - 12f) }
+            val threeVisible = markersForCorners(moved).filter { it.id != 2 }
+            val result = calc.compute(
+                MarkerResult(threeVisible, 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+            )
+            val afterCorners = result.paperCornersFrame!!
+
+            assertEquals(4, afterCorners.size, "All 4 corners must be present")
+            // Pure translation: affine delta should apply uniformly
+            for (id in 0..3) {
+                val dx = afterCorners[id].first - beforeCorners[id].first
+                val dy = afterCorners[id].second - beforeCorners[id].second
+                assertTrue(abs(dx - 25f) < 2f,
+                    "3-marker: corner $id dx=${dx} should be ~25")
+                assertTrue(abs(dy - (-12f)) < 2f,
+                    "3-marker: corner $id dy=${dy} should be ~-12")
+            }
+        }
+
+        @Test
+        fun `0-marker frame holds last known corners unchanged`() {
+            // When 0 markers are visible, smooth should remain unchanged (no partial writes).
+            val corners = a4Corners()
+            val calc = initCalculator(corners)
+
+            val before = calc.compute(
+                MarkerResult(markersForCorners(corners), 0L, frameW.toInt(), frameH.toInt()),
+                frameW, frameH
+            )
+            val beforeCorners = before.paperCornersFrame!!
+
+            // Feed 0 markers
+            val held = calc.compute(
+                MarkerResult(emptyList(), 0L, frameW.toInt(), frameH.toInt()), frameW, frameH
+            )
+            val heldCorners = held.paperCornersFrame!!
+
+            assertEquals(4, heldCorners.size)
+            for (id in 0..3) {
+                assertEquals(beforeCorners[id].first, heldCorners[id].first, 0.01f,
+                    "Corner $id X should be unchanged")
+                assertEquals(beforeCorners[id].second, heldCorners[id].second, 0.01f,
+                    "Corner $id Y should be unchanged")
+            }
+        }
+
+        @Test
         fun `resetReference from paper-corner mode returns to affine fallback`() {
             val corners = a4Corners()
             val calc = OverlayTransformCalculator(smoothingFactor = 1f)
@@ -1075,6 +1194,61 @@ class OverlayTransformCalculatorTest {
             )
             assertTrue(err < 10f,
                 "setFocalLength before init: hidden corner error=${err}px (expected <10 if f preserved)")
+        }
+    }
+
+    @Nested
+    inner class ThreadSafety {
+        @Test
+        fun `concurrent setFocalLength and compute does not crash`() {
+            // Stress test: call setFocalLength from a background thread while
+            // compute runs on the test thread. Verifies no crash, no exception.
+            val corners = listOf(
+                Pair(440f, 77f), Pair(840f, 77f),
+                Pair(840f, 643f), Pair(440f, 643f)
+            )
+            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
+            val markers = (0..3).map { id ->
+                val s = 15f
+                val offsets = listOf(Pair(-s, -s), Pair(+s, -s), Pair(+s, +s), Pair(-s, +s))
+                val cx = corners[id].first - offsets[id].first
+                val cy = corners[id].second - offsets[id].second
+                DetectedMarker(id, cx, cy, offsets.map { (dx, dy) -> Pair(cx + dx, cy + dy) }, 1f)
+            }
+            val mr = MarkerResult(markers, 0L, 1280, 720)
+            calc.compute(mr, 1280f, 720f) // init reference
+
+            val failed = AtomicBoolean(false)
+            val latch = CountDownLatch(1)
+            val iterations = 1000
+
+            // Background thread: hammer setFocalLength with varying values
+            val writer = thread(start = true) {
+                latch.await()
+                try {
+                    for (i in 1..iterations) {
+                        calc.setFocalLength(500f + i.toFloat())
+                    }
+                } catch (e: Exception) {
+                    failed.set(true)
+                }
+            }
+
+            // Main thread: hammer compute
+            latch.countDown()
+            try {
+                for (i in 1..iterations) {
+                    val result = calc.compute(mr, 1280f, 720f)
+                    // Result should always have 4 paper corners
+                    assertNotNull(result.paperCornersFrame)
+                    assertEquals(4, result.paperCornersFrame!!.size)
+                }
+            } catch (e: Exception) {
+                failed.set(true)
+            }
+
+            writer.join(5000)
+            assertTrue(!failed.get(), "Concurrent setFocalLength/compute caused an exception")
         }
     }
 }

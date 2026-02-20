@@ -5,6 +5,7 @@
 #include <opencv2/objdetect/aruco_detector.hpp>
 #include <vector>
 #include <chrono>
+#include <mutex>
 
 #define LOG_TAG "TraceGlassCV"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
@@ -17,10 +18,14 @@
         return JNI_ERR; \
     }
 
-// Cached ArUco detector — single-threaded (CameraX analysis executor)
+// Cached ArUco detector — accessed from CameraX analysisExecutor which is a
+// single-thread pool (Executors.newSingleThreadExecutor in CameraXManager).
+// The mutex below is defense-in-depth; it serializes access if the threading
+// model ever changes (e.g. parallel analysis pipelines).
 static cv::aruco::Dictionary s_dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
 static cv::aruco::DetectorParameters s_detectorParams;
 static cv::aruco::ArucoDetector s_detector(s_dictionary, s_detectorParams);
+static std::mutex s_detectorMutex;
 
 // Cached JNI class/method IDs — initialized in JNI_OnLoad
 static jclass g_listClass = nullptr;
@@ -140,10 +145,13 @@ Java_io_github_jn0v_traceglass_core_cv_impl_OpenCvMarkerDetector_nativeDetect(
         cv::rotate(gray, gray, cv::ROTATE_90_COUNTERCLOCKWISE);
     }
 
-    // ArUco marker detection (using cached static detector)
+    // ArUco marker detection (using cached static detector, mutex-guarded)
     std::vector<std::vector<cv::Point2f>> corners;
     std::vector<int> ids;
-    s_detector.detectMarkers(gray, corners, ids);
+    {
+        std::lock_guard<std::mutex> lock(s_detectorMutex);
+        s_detector.detectMarkers(gray, corners, ids);
+    }
 
     auto endTime = std::chrono::steady_clock::now();
     auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
