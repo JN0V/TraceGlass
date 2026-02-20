@@ -16,9 +16,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import io.github.jn0v.traceglass.feature.tracing.R
 import io.github.jn0v.traceglass.feature.tracing.TrackingState
 
 @Composable
@@ -29,8 +31,8 @@ fun TrackingIndicator(
     if (trackingState == TrackingState.INACTIVE) return
 
     val description = when (trackingState) {
-        TrackingState.TRACKING -> "Marker tracking active"
-        TrackingState.LOST -> "Marker tracking lost"
+        TrackingState.TRACKING -> stringResource(R.string.tracking_desc_active)
+        TrackingState.LOST -> stringResource(R.string.tracking_desc_lost)
         else -> ""
     }
     Row(
@@ -53,7 +55,7 @@ fun TrackingIndicator(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = "Tracking",
+                    text = stringResource(R.string.tracking_status_active),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White
                 )
@@ -67,7 +69,7 @@ fun TrackingIndicator(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = "Lost",
+                    text = stringResource(R.string.tracking_status_lost),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White
                 )

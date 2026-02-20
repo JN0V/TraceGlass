@@ -16,7 +16,7 @@ class IntentVideoSharer(private val context: Context) : VideoSharer {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        val chooser = Intent.createChooser(shareIntent, "Share time-lapse")
+        val chooser = Intent.createChooser(shareIntent, context.getString(R.string.share_chooser_title))
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             context.startActivity(chooser)

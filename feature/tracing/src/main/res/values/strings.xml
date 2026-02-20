@@ -51,4 +51,81 @@
     <string name="about_third_party_list">OpenCV (Apache 2.0)\nCoil (Apache 2.0)\nKoin (Apache 2.0)\nJetpack libraries (Apache 2.0)</string>
     <string name="about_view_github">View on GitHub (opens browser)</string>
     <string name="about_github_url" translatable="false">https://github.com/jn0v/traceglass</string>
+
+    <!-- Timelapse post-compilation dialog -->
+    <string name="timelapse_dialog_title">Timelapse ready!</string>
+    <string name="timelapse_saving">Saving…</string>
+    <string name="timelapse_dialog_message">What would you like to do with your time-lapse video?</string>
+    <string name="timelapse_save_to_gallery">Save to Gallery</string>
+    <string name="timelapse_discard">Discard</string>
+    <string name="timelapse_share">Share</string>
+
+    <!-- Unlock dialog -->
+    <string name="unlock_dialog_title">Unlock overlay?</string>
+    <string name="unlock_dialog_message">Your current position will be adjustable again.</string>
+    <string name="unlock_confirm">Unlock</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <!-- Permission screen -->
+    <string name="camera_permission_title">Camera permission required</string>
+    <string name="camera_permission_message">TraceGlass needs camera access to display your drawing surface. No images are stored or sent anywhere.</string>
+    <string name="grant_permission">Grant Permission</string>
+
+    <!-- Session controls -->
+    <string name="session_stop">Stop</string>
+    <string name="session_start">Start</string>
+
+    <!-- Menu / flashlight -->
+    <string name="flashlight_turn_off">Turn off flashlight</string>
+    <string name="flashlight_turn_on">Turn on flashlight</string>
+    <string name="pick_reference_image">Pick reference image</string>
+
+    <!-- Snackbar messages -->
+    <string name="compilation_failed">Compilation failed: %1$s</string>
+    <string name="export_failed">Export failed: %1$s</string>
+    <string name="export_success">Video saved to Movies/TraceGlass/</string>
+    <string name="camera_error_message">Camera error: %1$s</string>
+
+    <!-- Timelapse controls -->
+    <string name="compiling_progress">Compiling %1$d%%</string>
+    <string name="percentage_format" translatable="false">%1$d%%</string>
+
+    <!-- Content descriptions -->
+    <string name="content_desc_overlay_image">Overlay reference image</string>
+    <string name="content_desc_exporting">Exporting video</string>
+    <string name="content_desc_recording">Recording</string>
+    <string name="content_desc_paused">Paused</string>
+    <string name="content_desc_pause_timelapse">Pause timelapse</string>
+    <string name="content_desc_resume_timelapse">Resume timelapse</string>
+    <string name="content_desc_stop_timelapse">Stop timelapse</string>
+    <string name="content_desc_start_timelapse">Start timelapse</string>
+
+    <!-- Tracking indicator -->
+    <string name="tracking_status_active">Tracking</string>
+    <string name="tracking_status_lost">Lost</string>
+    <string name="tracking_desc_active">Marker tracking active</string>
+    <string name="tracking_desc_lost">Marker tracking lost</string>
+
+    <!-- Visual mode controls -->
+    <string name="visual_mode_inverted">Inverted</string>
+    <string name="color_tint_none">None</string>
+    <string name="color_tint_red">Red</string>
+    <string name="color_tint_green">Green</string>
+    <string name="color_tint_blue">Blue</string>
+    <string name="color_tint_gray">Gray</string>
+
+    <!-- Expandable menu -->
+    <plurals name="menu_options_count">
+        <item quantity="one">Menu: %1$d option</item>
+        <item quantity="other">Menu: %1$d options</item>
+    </plurals>
+    <string name="menu_close">Close menu</string>
+    <string name="menu_open">Open menu</string>
+
+    <!-- Opacity controls -->
+    <string name="overlay_opacity_desc">Overlay opacity: %1$d%%</string>
+
+    <!-- Lock button -->
+    <string name="content_desc_locked_overlay">Unlock overlay — currently locked</string>
+    <string name="lock_overlay_position">Lock overlay position</string>
 </resources>

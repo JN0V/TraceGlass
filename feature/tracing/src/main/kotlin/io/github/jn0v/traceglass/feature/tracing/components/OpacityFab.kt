@@ -25,10 +25,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import io.github.jn0v.traceglass.feature.tracing.R
 
 @Composable
 fun OpacityFab(
@@ -50,6 +52,9 @@ fun OpacityFab(
         }
     }
 
+    val opacityPercent = (opacity * 100).toInt()
+    val opacityDesc = stringResource(R.string.overlay_opacity_desc, opacityPercent)
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -65,7 +70,7 @@ fun OpacityFab(
                 modifier = Modifier.padding(bottom = 8.dp)
             ) {
                 Text(
-                    text = "${(opacity * 100).toInt()}%",
+                    text = stringResource(R.string.percentage_format, opacityPercent),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -94,8 +99,7 @@ fun OpacityFab(
                         }
                         .width(200.dp)
                         .semantics {
-                            contentDescription =
-                                "Overlay opacity: ${(opacity * 100).toInt()}%"
+                            contentDescription = opacityDesc
                         }
                 )
             }
@@ -106,7 +110,7 @@ fun OpacityFab(
             modifier = Modifier.size(48.dp)
         ) {
             Text(
-                text = "${(opacity * 100).toInt()}%",
+                text = stringResource(R.string.percentage_format, opacityPercent),
                 style = MaterialTheme.typography.labelSmall
             )
         }
