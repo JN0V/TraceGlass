@@ -20,12 +20,12 @@ import kotlin.math.sqrt
  * - 1 marker: compute translation delta from 1 visible, apply to hidden
  * - 0 markers: hold last known corners
  *
- * **Thread safety:** This class is **not** thread-safe. All calls to [compute],
- * [computeSmoothed], [setFocalLength], and [resetReference] must be made from
- * the same thread. In the current architecture, all calls run on the main thread:
- * marker results are collected via `StateFlow` in a composable `LaunchedEffect`,
- * and `setFocalLength` is called from `viewModelScope`. The caller is responsible
- * for ensuring sequential access if the threading model changes.
+ * **Thread safety:** [compute] and [computeSmoothed] must be called from the main
+ * thread (composable `LaunchedEffect` collecting `StateFlow`). [setFocalLength]
+ * may be called from any thread (e.g. `viewModelScope`); the three fields it writes
+ * ([calibratedFocalLength], [isFocalLengthExternal], [needsRebuildPaperCoords])
+ * are `@Volatile`, so changes are visible to the next [compute] call without locking.
+ * [resetReference] must be called from the main thread.
  */
 class OverlayTransformCalculator(
     private val smoothingFactor: Float = 0.12f
@@ -34,14 +34,14 @@ class OverlayTransformCalculator(
     private var referenceCorners: Map<Int, Pair<Float, Float>>? = null
     private var smoothedCorners: MutableMap<Int, Pair<Float, Float>>? = null
     private var referencePaperAR: Float = 0f
-    private var calibratedFocalLength: Float? = null
+    @Volatile private var calibratedFocalLength: Float? = null
     // True when calibratedFocalLength was set via setFocalLength() (external source
     // like CameraX intrinsics), as opposed to auto-estimated from marker geometry.
     // External values survive resetReference() since camera intrinsics don't change.
-    private var isFocalLengthExternal: Boolean = false
+    @Volatile private var isFocalLengthExternal: Boolean = false
     // Rectangular paper coords for constrained homography (paper-size agnostic)
     private var calibratedPaperCorners: List<Pair<Float, Float>>? = null
-    private var needsRebuildPaperCoords: Boolean = false
+    @Volatile private var needsRebuildPaperCoords: Boolean = false
     // True when reference was near fronto-parallel (paper coords approximate a rectangle).
     // Auto-f-estimation only works when this is true.
     private var isReferenceRectangular: Boolean = false
@@ -208,6 +208,11 @@ class OverlayTransformCalculator(
         frameWidth: Float,
         frameHeight: Float
     ) {
+        // Estimated positions are collected into a temporary map first, then applied
+        // to [smooth] only if ALL missing corners were computed successfully.
+        // This prevents partial state corruption when a lookup fails mid-loop.
+        val estimated = mutableMapOf<Int, Pair<Float, Float>>()
+
         when {
             visibleIds.size >= 3 -> {
                 // Try perspective-correct estimation using paper geometry + focal length
@@ -225,7 +230,7 @@ class OverlayTransformCalculator(
 
                 for (id in missingIds) {
                     val p = prev[id] ?: smooth[id] ?: return
-                    smooth[id] = Pair(
+                    estimated[id] = Pair(
                         affine[0] * p.first + affine[1] * p.second + affine[2],
                         affine[3] * p.first + affine[4] * p.second + affine[5]
                     )
@@ -241,7 +246,7 @@ class OverlayTransformCalculator(
 
                 for (id in missingIds) {
                     val p = prev[id] ?: smooth[id] ?: return
-                    smooth[id] = applySimilarity(sim, p)
+                    estimated[id] = applySimilarity(sim, p)
                 }
             }
             visibleIds.size == 1 -> {
@@ -254,11 +259,15 @@ class OverlayTransformCalculator(
 
                 for (id in missingIds) {
                     val p = prev[id] ?: smooth[id] ?: return
-                    smooth[id] = Pair(p.first + tx, p.second + ty)
+                    estimated[id] = Pair(p.first + tx, p.second + ty)
                 }
             }
             // 0 visible: hold last known positions (smooth unchanged)
         }
+
+        // Batch apply: write all estimated positions only if all succeeded.
+        // Not thread-safe (single-threaded caller assumed), but avoids partial writes.
+        smooth.putAll(estimated)
     }
 
     /**
@@ -286,15 +295,19 @@ class OverlayTransformCalculator(
             paperCoords3, frameCoords3, f, frameWidth / 2f, frameHeight / 2f
         ) ?: return false
 
+        // Compute all missing corners into a temp map before writing to smooth,
+        // so a mid-loop failure leaves smooth unchanged.
+        val estimated = mutableMapOf<Int, Pair<Float, Float>>()
         for (id in missingIds) {
             val (px, py) = paper[id]
             val w = H[6] * px + H[7] * py + H[8]
             if (kotlin.math.abs(w) < 1e-6f) return false
-            smooth[id] = Pair(
+            estimated[id] = Pair(
                 (H[0] * px + H[1] * py + H[2]) / w,
                 (H[3] * px + H[4] * py + H[5]) / w
             )
         }
+        smooth.putAll(estimated)
         return true
     }
 
@@ -487,6 +500,10 @@ class OverlayTransformCalculator(
 
     /** Exposed for test verification only. */
     val calibratedFocalLengthForTest: Float? get() = calibratedFocalLength
+    /** Exposed for test verification only. */
+    val isFocalLengthExternalForTest: Boolean get() = isFocalLengthExternal
+    /** Exposed for test verification only. */
+    val needsRebuildPaperCoordsForTest: Boolean get() = needsRebuildPaperCoords
 
     fun resetReference() {
         referenceSpacing = null
