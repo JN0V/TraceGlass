@@ -10,6 +10,7 @@ import io.github.jn0v.traceglass.core.cv.MarkerResult
 import io.github.jn0v.traceglass.core.overlay.OverlayTransformCalculator
 import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
 import io.github.jn0v.traceglass.core.session.SessionData
+import io.github.jn0v.traceglass.core.session.SessionRepository
 import io.github.jn0v.traceglass.core.timelapse.CompilationResult
 import io.github.jn0v.traceglass.core.timelapse.ExportResult
 import io.github.jn0v.traceglass.core.timelapse.SnapshotStorage
@@ -66,7 +67,7 @@ class TracingViewModelTest {
     private fun createViewModel(
         flashlightController: FakeFlashlightController = fakeFlashlight,
         trackingStateManager: TrackingStateManager? = null,
-        sessionRepository: FakeSessionRepository = FakeSessionRepository(),
+        sessionRepository: SessionRepository = FakeSessionRepository(),
         settingsRepository: FakeSettingsRepository = FakeSettingsRepository(),
         transformCalculator: OverlayTransformCalculator? = null,
         cameraManager: FakeCameraManagerForTest? = null,
@@ -1728,6 +1729,83 @@ class TracingViewModelTest {
         }
 
         @Test
+        fun `restoreSession retries correctly after CancellationException`() = runTest {
+            mockkStatic(Uri::class)
+            try {
+                every { Uri.parse(any()) } returns mockk()
+
+                var shouldCancel = true
+                val cancellingRepo = object : SessionRepository {
+                    private val data = MutableStateFlow(SessionData(imageUri = "file:///img"))
+                    override val sessionData: kotlinx.coroutines.flow.Flow<SessionData> = kotlinx.coroutines.flow.flow {
+                        if (shouldCancel) throw kotlin.coroutines.cancellation.CancellationException("simulated cancellation")
+                        emit(data.value)
+                    }
+                    override suspend fun save(data: SessionData) { this.data.value = data }
+                    override suspend fun clear() { data.value = SessionData() }
+                }
+
+                val viewModel = createViewModel(sessionRepository = cancellingRepo)
+
+                // First attempt — CancellationException should transition back to Idle
+                try {
+                    viewModel.restoreSession()
+                } catch (_: kotlin.coroutines.cancellation.CancellationException) {
+                    // expected
+                }
+                assertFalse(viewModel.uiState.value.showResumeSessionDialog, "Dialog should not show after cancellation")
+
+                // Retry — this time should succeed
+                shouldCancel = false
+                viewModel.restoreSession()
+                assertTrue(viewModel.uiState.value.showResumeSessionDialog, "Retry should succeed and show dialog")
+
+                viewModel.viewModelScope.cancel()
+            } finally {
+                unmockkStatic(Uri::class)
+            }
+        }
+
+        @Test
+        fun `restoreSession retries correctly after IO exception`() = runTest {
+            mockkStatic(android.util.Log::class)
+            every { android.util.Log.w(any<String>(), any<String>(), any()) } returns 0
+            try {
+                var shouldFail = true
+                val failingRepo = object : SessionRepository {
+                    private val data = MutableStateFlow(SessionData(imageUri = "file:///img"))
+                    override val sessionData: kotlinx.coroutines.flow.Flow<SessionData> = kotlinx.coroutines.flow.flow {
+                        if (shouldFail) throw java.io.IOException("DataStore corruption")
+                        emit(data.value)
+                    }
+                    override suspend fun save(data: SessionData) { this.data.value = data }
+                    override suspend fun clear() { data.value = SessionData() }
+                }
+
+                val viewModel = createViewModel(sessionRepository = failingRepo)
+
+                // First attempt — IO error should transition back to Idle silently
+                viewModel.restoreSession()
+                assertFalse(viewModel.uiState.value.showResumeSessionDialog, "Dialog should not show after IO error")
+
+                // Retry — this time should succeed
+                mockkStatic(Uri::class)
+                try {
+                    every { Uri.parse(any()) } returns mockk()
+                    shouldFail = false
+                    viewModel.restoreSession()
+                    assertTrue(viewModel.uiState.value.showResumeSessionDialog, "Retry should succeed after IO recovery")
+
+                    viewModel.viewModelScope.cancel()
+                } finally {
+                    unmockkStatic(Uri::class)
+                }
+            } finally {
+                unmockkStatic(android.util.Log::class)
+            }
+        }
+
+        @Test
         fun `onImageSelected triggers immediate save`() = runTest {
             val repo = FakeSessionRepository()
             val viewModel = createViewModel(sessionRepository = repo)
@@ -2115,6 +2193,54 @@ class TracingViewModelTest {
 
             assertEquals(0, exporter.exportCalls)
             assertFalse(vm.uiState.value.isExporting)
+        }
+
+        @Test
+        fun `concurrent export is rejected while already exporting`() = runTest(testDispatcher) {
+            val exporter = FakeVideoExporter().apply { successUri = mockk() }
+            val (vm, _, _) = createExportViewModel(exporter = exporter)
+            compileVideo(vm)
+
+            // First export — sets isExporting = true
+            vm.exportTimelapse()
+            assertTrue(vm.uiState.value.isExporting, "Should be exporting after first call")
+
+            // Second export while first is in-flight — should be rejected
+            vm.exportTimelapse()
+
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Only one export should have occurred
+            assertEquals(1, exporter.exportCalls, "Second export should be rejected while first is in-flight")
+            // Verify first export completed successfully
+            assertFalse(vm.uiState.value.isExporting, "Export should have completed")
+            assertNotNull(vm.uiState.value.exportedVideoUri, "Export URI should be set after completion")
+            vm.viewModelScope.cancel()
+        }
+
+        @Test
+        fun `concurrent share is rejected while already exporting`() = runTest(testDispatcher) {
+            val exporter = FakeVideoExporter().apply { successUri = mockk() }
+            val sharer = FakeVideoSharer()
+            val (vm, _, _) = createExportViewModel(exporter = exporter, sharer = sharer)
+            compileVideo(vm)
+
+            // Start export
+            vm.exportTimelapse()
+            assertTrue(vm.uiState.value.isExporting)
+
+            // shareTimelapse while exporting — should be rejected (no URI yet, so it tries performExport)
+            vm.shareTimelapse()
+
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Only one export call, no share calls
+            assertEquals(1, exporter.exportCalls, "Share should not trigger another export while one is in-flight")
+            assertEquals(0, sharer.shareCalls, "shareVideo should not be called during in-flight export")
+            // Verify first export completed successfully
+            assertFalse(vm.uiState.value.isExporting, "Export should have completed")
+            assertNotNull(vm.uiState.value.exportedVideoUri, "Export URI should be set")
+            vm.viewModelScope.cancel()
         }
     }
 

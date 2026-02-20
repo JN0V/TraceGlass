@@ -1,6 +1,6 @@
 # Story 9.2: TracingViewModel State Management Cleanup
 
-Status: ready-for-dev
+Status: completed
 
 ## Story
 
@@ -20,21 +20,20 @@ So that race conditions between restore flow, compilation, and export are elimin
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Replace `@Volatile pendingRestoreData` with `AtomicReference<SessionData?>` (AC: #1)
-  - [ ] 1.1 Replace declaration at line 572
-  - [ ] 1.2 Update all read sites (`pendingRestoreData` access) to use `.get()`
-  - [ ] 1.3 Update all write sites to use `.set()` or `.getAndSet(null)` for consume-once pattern
-- [ ] Task 2: Replace dual AtomicBoolean restore flags with sealed class state (AC: #2)
-  - [ ] 2.1 Create `RestoreState` sealed class: `Idle`, `Loading`, `Ready(data)`, `Completed`, `Failed`
-  - [ ] 2.2 Replace `restoreAttempted: AtomicBoolean` + `restoreCompleted: AtomicBoolean` with `AtomicReference<RestoreState>`
-  - [ ] 2.3 Use `compareAndSet(Idle, Loading)` for entry guard
-  - [ ] 2.4 On CancellationException: transition back to `Idle` (not `Failed`) so retry works
-  - [ ] 2.5 Add test: verify restore retries correctly after CancellationException
-- [ ] Task 3: Add export mutual exclusion guard (AC: #3)
-  - [ ] 3.1 Add `if (_uiState.value.isExporting) return` guard to `performExport()`
-  - [ ] 3.2 Or: add `isExporting` AtomicBoolean similar to `isCompiling` pattern
-  - [ ] 3.3 Add test: verify concurrent export is rejected
-- [ ] Task 4: Run full test suite, verify no regressions (AC: #4)
+- [x] Task 1: Replace `@Volatile pendingRestoreData` with `AtomicReference<SessionData?>` (AC: #1)
+  - [x] 1.1 Replace declaration with `AtomicReference<SessionData?>(null)`
+  - [x] 1.2 Update all read sites — `getAndSet(null)` for consume-once in `onResumeSessionAccepted()`
+  - [x] 1.3 Update all write sites to use `.set()`
+- [x] Task 2: Replace dual AtomicBoolean restore flags with sealed class state (AC: #2)
+  - [x] 2.1 Created `RestoreState` sealed class: `Idle`, `Loading`, `Completed` (Ready/Failed not needed — pendingRestoreData serves Ready role, errors reset to Idle)
+  - [x] 2.2 Replaced `restoreAttempted: AtomicBoolean` + `restoreCompleted: AtomicBoolean` with `AtomicReference<RestoreState>`
+  - [x] 2.3 Used `compareAndSet(Idle, Loading)` for entry guard
+  - [x] 2.4 On CancellationException: transition back to `Idle` so retry works
+  - [x] 2.5 Added test: verify restore retries correctly after CancellationException
+- [x] Task 3: Add export mutual exclusion guard (AC: #3)
+  - [x] 3.1 Added `if (_uiState.value.isExporting) return` guard to `performExport()`
+  - [x] 3.3 Added tests: concurrent export rejected + concurrent share rejected
+- [x] Task 4: Run full test suite, verify no regressions (AC: #4) — 200 tests, 0 failures
 
 ## Dev Notes
 
@@ -81,9 +80,23 @@ From Stories 5.1-5.2: Session persistence was added with eager save + debounce p
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude Opus 4.6
 
 ### Debug Log References
+N/A — no debugging needed, all changes compiled and tested on first run.
 
 ### Completion Notes List
+- Simplified RestoreState to 3 states (Idle/Loading/Completed) instead of spec's 5 — Ready(data) role served by pendingRestoreData AtomicReference, Failed not needed since errors transition to Idle for retry.
+- Used `_uiState.value.isExporting` guard (Task 3.1 path) instead of separate AtomicBoolean — simpler, consistent with existing `isCompiling` guard pattern.
+- Removed unused `AtomicBoolean` import.
 
 ### File List
+- `feature/tracing/src/main/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModel.kt` — main implementation changes
+- `feature/tracing/src/test/kotlin/io/github/jn0v/traceglass/feature/tracing/TracingViewModelTest.kt` — 4 new tests added
+
+## Review Notes
+- Adversarial review completed
+- Findings: 13 total, 8 fixed, 3 skipped (noise), 2 skipped (intentional/undecided)
+- Resolution approach: auto-fix
+- Fixed: IO error test (F3), try/finally for unmockkStatic (F4), viewModelScope cleanup (F5), final state assertions (F6/F7), field ordering (F8), sealed interface (F9), Log.w for error path (F10)
+- Skipped: F1 (intentional design — save blocked during dialog), F2 (TOCTOU noise — main thread only), F11 (data object singleton invariant obvious), F12 (AC #1 requires AtomicReference), F13 (type widening minimal impact)
