@@ -135,11 +135,11 @@ The system degrades gracefully as markers are lost:
 
 ### References
 
-- [Source: core/overlay/HomographySolver.kt:205-302 — solveConstrainedHomography()]
-- [Source: core/overlay/HomographySolver.kt:304-337 — reconstructH(), evalConstraints()]
-- [Source: core/overlay/OverlayTransformCalculator.kt:184-242 — estimateFromDelta() dispatcher]
-- [Source: core/overlay/OverlayTransformCalculator.kt:250-279 — estimateFromPaperGeometry()]
-- [Source: core/overlay/OverlayTransformCalculator.kt:286-317 — computeSimilarityParams(), applySimilarity()]
+- [Source: core/overlay/HomographySolver.kt:213-317 — solveConstrainedHomography()]
+- [Source: core/overlay/HomographySolver.kt:319-352 — reconstructH(), evalConstraints()]
+- [Source: core/overlay/OverlayTransformCalculator.kt:197-256 — estimateFromDelta() dispatcher]
+- [Source: core/overlay/OverlayTransformCalculator.kt:264-293 — estimateFromPaperGeometry()]
+- [Source: core/overlay/OverlayTransformCalculator.kt:300-331 — computeSimilarityParams(), applySimilarity()]
 
 ## Dev Agent Record
 

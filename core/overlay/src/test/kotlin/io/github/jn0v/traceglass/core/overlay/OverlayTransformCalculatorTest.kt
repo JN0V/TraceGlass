@@ -902,5 +902,59 @@ class OverlayTransformCalculatorTest {
             val calc = OverlayTransformCalculator()
             calc.setFocalLength(800f) // Should not throw
         }
+
+        @Test
+        fun `setFocalLength before first detection is preserved`() {
+            // Finding #2: setFocalLength called before 4-marker init must not be lost
+            val corners = listOf(
+                Pair(440f, 77f), Pair(840f, 77f),
+                Pair(840f, 643f), Pair(440f, 643f)
+            )
+            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
+            calc.setFocalLength(800f)
+
+            // First 4-marker detection — must NOT reset calibratedFocalLength
+            val markers = (0..3).map { id ->
+                val s = 15f
+                val offsets = listOf(Pair(-s, -s), Pair(+s, -s), Pair(+s, +s), Pair(-s, +s))
+                val cx = corners[id].first - offsets[id].first
+                val cy = corners[id].second - offsets[id].second
+                DetectedMarker(id, cx, cy, offsets.map { (dx, dy) -> Pair(cx + dx, cy + dy) }, 1f)
+            }
+            val mr = MarkerResult(markers, 0L, 1280, 720)
+            calc.compute(mr, 1280f, 720f) // init reference
+            calc.compute(mr, 1280f, 720f) // set prevSmooth
+
+            // Now tilt and hide one corner — should use constrained H (needs f)
+            val rad = Math.toRadians(15.0)
+            val cosT = kotlin.math.cos(rad).toFloat()
+            val sinT = kotlin.math.sin(rad).toFloat()
+            val cx = 640f; val cy = 360f
+            val tilted = corners.map { (x, y) ->
+                val dx = x - cx; val dy = y - cy
+                val y3d = dy * cosT; val z3d = -dy * sinT
+                val depth = 800f + z3d
+                if (depth < 1f) Pair(x, y)
+                else Pair(cx + dx * 800f / depth, cy + y3d * 800f / depth)
+            }
+            val tiltedMarkers = (0..3).filter { it != 2 }.map { id ->
+                val s = 15f
+                val offsets = listOf(Pair(-s, -s), Pair(+s, -s), Pair(+s, +s), Pair(-s, +s))
+                val mcx = tilted[id].first - offsets[id].first
+                val mcy = tilted[id].second - offsets[id].second
+                DetectedMarker(id, mcx, mcy, offsets.map { (dx, dy) -> Pair(mcx + dx, mcy + dy) }, 1f)
+            }
+            val result = calc.compute(
+                MarkerResult(tiltedMarkers, 0L, 1280, 720), 1280f, 720f
+            )
+            // If f was preserved, constrained H produces tight estimate
+            val estimated = result.paperCornersFrame!!
+            val err = sqrt(
+                (tilted[2].first - estimated[2].first).let { it * it } +
+                (tilted[2].second - estimated[2].second).let { it * it }
+            )
+            assertTrue(err < 10f,
+                "setFocalLength before init: hidden corner error=${err}px (expected <10 if f preserved)")
+        }
     }
 }

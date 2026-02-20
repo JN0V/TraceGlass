@@ -363,6 +363,120 @@ class HomographySolverTest {
             val H = HomographySolver.solveConstrainedHomography(paperPts, framePts, 800f, 640f, 360f)
             assertNull(H, "Collinear points should produce null constrained homography")
         }
+
+        @Test
+        fun `vertical-axis tilt degeneracy returns null or fallback`() {
+            // Tilt around vertical axis: left side closer, right side farther.
+            // This makes H[6] ≈ 0 while H[7] ≠ 0, triggering the orthogonality
+            // constraint degeneracy noted in Dev Notes.
+            val f = 800f
+            val paperWidthPx = 400f; val paperHeightPx = 566f
+            val corners = listOf(
+                Pair(cx - paperWidthPx / 2, cy - paperHeightPx / 2),
+                Pair(cx + paperWidthPx / 2, cy - paperHeightPx / 2),
+                Pair(cx + paperWidthPx / 2, cy + paperHeightPx / 2),
+                Pair(cx - paperWidthPx / 2, cy + paperHeightPx / 2)
+            )
+            val rad = Math.toRadians(20.0)
+            val cosT = cos(rad).toFloat(); val sinT = sin(rad).toFloat()
+            val frameCoords = corners.map { (x, y) ->
+                val dx = x - cx; val dy = y - cy
+                val x3d = dx * cosT
+                val z3d = -dx * sinT
+                val depth = f + z3d
+                if (depth < 1f) Pair(x, y)
+                else Pair(cx + x3d * f / depth, cy + dy * f / depth)
+            }
+
+            // Try hiding each corner in turn
+            for (hiddenId in 0..3) {
+                val visibleIds = (0..3).filter { it != hiddenId }
+                val paperPts = visibleIds.map { a4Corners[it] }
+                val framePts = visibleIds.map { frameCoords[it] }
+                val H = HomographySolver.solveConstrainedHomography(paperPts, framePts, f, cx, cy)
+                // Solver may return null (degeneracy) or a result — either is acceptable.
+                // If it returns a result, it must not contain NaN.
+                if (H != null) {
+                    assertTrue(H.none { it.isNaN() || it.isInfinite() },
+                        "Vertical tilt hidden=$hiddenId: result contains NaN/Inf")
+                }
+            }
+        }
+
+        @Test
+        fun `wrong focal length by 50 percent causes divergence or bounded error`() {
+            val trueF = 800f
+            val wrongF = 1200f // 50% too high
+            val frameCoords = projectA4(trueF, tiltDeg = 20f)
+
+            for (hiddenId in 0..3) {
+                val visibleIds = (0..3).filter { it != hiddenId }
+                val paperPts = visibleIds.map { a4Corners[it] }
+                val framePts = visibleIds.map { frameCoords[it] }
+
+                val H = HomographySolver.solveConstrainedHomography(paperPts, framePts, wrongF, cx, cy)
+                // With wrong f, solver should either:
+                // 1. Return null (divergence/constraint violation) — preferred
+                // 2. Return a result, but error will be larger than with correct f
+                if (H != null) {
+                    assertTrue(H.none { it.isNaN() || it.isInfinite() },
+                        "Wrong-f hidden=$hiddenId: result contains NaN/Inf")
+                    val (px, py) = a4Corners[hiddenId]
+                    val w = H[6] * px + H[7] * py + H[8]
+                    if (abs(w) > 1e-6f) {
+                        val estX = (H[0] * px + H[1] * py + H[2]) / w
+                        val estY = (H[3] * px + H[4] * py + H[5]) / w
+                        val err = errorPx(frameCoords[hiddenId], Pair(estX, estY))
+                        // With 50% wrong f at 20° tilt, error can reach ~160px for diagonal corners.
+                        // This validates the solver doesn't produce wildly divergent (>500px) results.
+                        assertTrue(err < 200f,
+                            "Wrong-f hidden=$hiddenId: error=${err}px (should be bounded)")
+                    }
+                }
+            }
+        }
+
+        @Test
+        fun `recovers 4th corner with off-center paper`() {
+            val f = 800f
+            val paperWidthPx = 400f; val paperHeightPx = 566f
+            // Paper shifted 150px right and 80px down from center
+            val offX = 150f; val offY = 80f
+            val corners = listOf(
+                Pair(cx + offX - paperWidthPx / 2, cy + offY - paperHeightPx / 2),
+                Pair(cx + offX + paperWidthPx / 2, cy + offY - paperHeightPx / 2),
+                Pair(cx + offX + paperWidthPx / 2, cy + offY + paperHeightPx / 2),
+                Pair(cx + offX - paperWidthPx / 2, cy + offY + paperHeightPx / 2)
+            )
+            // Apply perspective tilt (around image center, not paper center)
+            val rad = Math.toRadians(15.0)
+            val cosT = cos(rad).toFloat(); val sinT = sin(rad).toFloat()
+            val frameCoords = corners.map { (x, y) ->
+                val dx = x - cx; val dy = y - cy
+                val y3d = dy * cosT
+                val z3d = -dy * sinT
+                val depth = f + z3d
+                if (depth < 1f) Pair(x, y)
+                else Pair(cx + dx * f / depth, cy + y3d * f / depth)
+            }
+
+            for (hiddenId in 0..3) {
+                val visibleIds = (0..3).filter { it != hiddenId }
+                val paperPts = visibleIds.map { a4Corners[it] }
+                val framePts = visibleIds.map { frameCoords[it] }
+
+                val H = HomographySolver.solveConstrainedHomography(paperPts, framePts, f, cx, cy)
+                assertNotNull(H, "Off-center 15° hidden=$hiddenId: should solve")
+
+                val (px, py) = a4Corners[hiddenId]
+                val w = H!![6] * px + H[7] * py + H[8]
+                val estX = (H[0] * px + H[1] * py + H[2]) / w
+                val estY = (H[3] * px + H[4] * py + H[5]) / w
+                val err = errorPx(frameCoords[hiddenId], Pair(estX, estY))
+                assertTrue(err < 10f,
+                    "Off-center 15° hidden=$hiddenId: error=${err}px")
+            }
+        }
     }
 
     @Nested
