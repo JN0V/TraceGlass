@@ -23,7 +23,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,14 +46,17 @@ fun OnboardingScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { OnboardingViewModel.PAGE_COUNT })
+    val coroutineScope = rememberCoroutineScope()
 
-    BackHandler(enabled = uiState.currentPage > 0) {
-        viewModel.onPreviousPage()
+    // Pager is the single source of truth — ViewModel only observes settledPage
+    BackHandler(enabled = pagerState.currentPage > 0) {
+        coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
     }
 
     LaunchedEffect(mode) {
         if (mode == OnboardingMode.REOPENED) {
             viewModel.onReopen()
+            pagerState.scrollToPage(0)
         }
     }
 
@@ -61,12 +66,7 @@ fun OnboardingScreen(
         }
     }
 
-    LaunchedEffect(uiState.currentPage) {
-        if (pagerState.settledPage != uiState.currentPage) {
-            pagerState.animateScrollToPage(uiState.currentPage)
-        }
-    }
-
+    // Pager → ViewModel: single direction of truth
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collect { page ->
             viewModel.onPageChanged(page)
@@ -115,13 +115,16 @@ fun OnboardingScreen(
 
         Button(
             onClick = {
-                if (uiState.currentPage < OnboardingViewModel.PAGE_COUNT - 1) viewModel.onNextPage()
-                else viewModel.onComplete()
+                if (pagerState.settledPage < OnboardingViewModel.PAGE_COUNT - 1) {
+                    coroutineScope.launch { pagerState.animateScrollToPage(pagerState.settledPage + 1) }
+                } else {
+                    viewModel.onComplete()
+                }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                if (uiState.currentPage < OnboardingViewModel.PAGE_COUNT - 1)
+                if (pagerState.settledPage < OnboardingViewModel.PAGE_COUNT - 1)
                     stringResource(R.string.onboarding_next)
                 else
                     stringResource(R.string.onboarding_get_started)

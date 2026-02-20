@@ -375,21 +375,23 @@ class OverlayTransformCalculator(
         if (markers.size >= 2) {
             val spacing = computeMaxSpacing(markers)
             if (referenceSpacing == null) referenceSpacing = spacing
-            scale = spacing / referenceSpacing!!
+            val refSpacing = referenceSpacing ?: spacing
+            scale = if (refSpacing > 0.001f) spacing / refSpacing else 1f
 
             val angle = computeAngle(markers)
             if (referenceAngle == null) referenceAngle = angle
-            rotation = angle - referenceAngle!!
+            rotation = angle - (referenceAngle ?: angle)
         } else {
             val marker = markers[0]
             if (marker.corners.size >= 2) {
                 val edgeLength = computeEdgeLength(marker)
                 if (referenceEdgeLength == null) referenceEdgeLength = edgeLength
-                scale = edgeLength / referenceEdgeLength!!
+                val refEdge = referenceEdgeLength ?: edgeLength
+                scale = if (refEdge > 0.001f) edgeLength / refEdge else 1f
 
                 val angle = computeSingleMarkerAngle(marker)
                 if (referenceAngleSingle == null) referenceAngleSingle = angle
-                rotation = angle - referenceAngleSingle!!
+                rotation = angle - (referenceAngleSingle ?: angle)
             } else {
                 scale = lastTransform.scale
                 rotation = lastTransform.rotation

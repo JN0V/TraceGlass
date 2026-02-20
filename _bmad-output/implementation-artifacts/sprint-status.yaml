@@ -111,3 +111,12 @@ development_status:
   8-3-3-marker-constrained-homography: done # Newton-Raphson constrained H, delta fallback hierarchy, sub-5px at 20°
   8-4-camerax-intrinsics-integration: review # Wire CameraX focal length → setFocalLength()
   epic-8-retrospective: optional
+
+  # Epic 9: Robustness & Code Health
+  # Cross-cutting hardening from adversarial code review (thread safety, state, i18n, lifecycle)
+  epic-9: backlog
+  9-1-overlay-transform-thread-safety: backlog
+  9-2-tracing-viewmodel-state-management: backlog
+  9-3-i18n-hardcoded-strings: backlog
+  9-4-camera-frame-analyzer-lifecycle: backlog
+  epic-9-retrospective: optional

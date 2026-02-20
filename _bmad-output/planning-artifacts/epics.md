@@ -983,3 +983,115 @@ So that 3-marker tracking works reliably even when I start with my phone tilted.
 **Given** the device does not expose focal length data
 **When** the camera is bound
 **Then** no focal length is injected and the system relies on auto-estimation or affine fallback
+
+## Epic 9: Robustness & Code Health
+
+Systematic hardening of thread safety, state management, internationalization, and resource lifecycle issues identified by adversarial code review. These are cross-cutting concerns that reduce crash risk and improve maintainability.
+
+### Story 9.1: OverlayTransformCalculator Thread Safety & State Integrity
+
+As a developer,
+I want the OverlayTransformCalculator to be safe against concurrent access and partial state corruption,
+So that tracking never crashes or produces corrupted overlay positions.
+
+**Context:** Adversarial review findings #4 (no thread safety enforcement), #5 (static ArUco detector shared without lock), #9 (early returns leave smoothedCorners partially written). The class documents "not thread-safe" but nothing enforces it. `setFocalLength()` from viewModelScope can race with `compute()` on the analysis executor.
+
+**Acceptance Criteria:**
+
+**Given** `setFocalLength()` is called from viewModelScope while `compute()` runs on the analysis executor
+**When** both execute concurrently
+**Then** no data corruption, no crash, and the focal length is applied on the next `compute()` call
+
+**Given** an early return occurs in `estimateFromDelta()` due to missing corner lookup
+**When** the next frame is processed
+**Then** `smoothedCorners` is not in a partially-updated state — either fully updated or unchanged
+
+**Given** the static ArUco detector in C++ (`s_detector`)
+**When** `nativeDetect()` is called
+**Then** access is serialized (single-threaded CameraX analysis executor enforced, or mutex in native code)
+
+**Given** thread safety is enforced
+**When** all existing `OverlayTransformCalculatorTest` tests run
+**Then** all tests still pass with no regressions
+
+### Story 9.2: TracingViewModel State Management Cleanup
+
+As a developer,
+I want TracingViewModel to use safe concurrency primitives for session restore and timelapse operations,
+So that race conditions between restore flow, compilation, and export are eliminated.
+
+**Context:** Adversarial review findings #6 (`@Volatile` on complex `pendingRestoreData` object), #13 (AtomicBoolean race in restore flow), #29 (no mutual exclusion between compile and export). The current dual-AtomicBoolean pattern for restore has a window where UI thinks restore is complete but it isn't.
+
+**Acceptance Criteria:**
+
+**Given** `pendingRestoreData` is set from the init coroutine and read from UI event handlers
+**When** both access it concurrently
+**Then** the reader sees either null or a fully-constructed `SessionData` — never a partial object
+
+**Given** `restoreSession()` throws `CancellationException`
+**When** the user retries restore
+**Then** the restore flow executes correctly (not silently no-op'd by a stale flag)
+
+**Given** a timelapse export is in progress
+**When** the user triggers `shareTimelapse()` which calls `performExport()`
+**Then** the second export is rejected or queued — not started concurrently
+
+**Given** all state management changes are applied
+**When** all existing `TracingViewModelTest` tests run
+**Then** all tests still pass with no regressions
+
+### Story 9.3: Internationalization of Hardcoded UI Strings
+
+As a user,
+I want all user-facing text to be in string resources,
+So that the app can be translated to other languages in the future.
+
+**Context:** Adversarial review finding #19. Over 30 hardcoded English strings in `TracingContent.kt`, `VisualModeControls.kt`, `TrackingIndicator.kt`, and dialogs. These bypass Android's resource system, making translation impossible.
+
+**Acceptance Criteria:**
+
+**Given** all user-facing strings in the tracing feature module
+**When** the strings are audited
+**Then** every hardcoded string is moved to `res/values/strings.xml` and accessed via `stringResource()`
+
+**Given** the timelapse dialog strings ("Timelapse ready!", "Save to Gallery", "Discard", "Share", "Saving...")
+**When** they are displayed
+**Then** they use string resources, not hardcoded text
+
+**Given** the unlock dialog strings ("Unlock overlay?", "Your current position will be adjustable again.", "Unlock", "Cancel")
+**When** they are displayed
+**Then** they use string resources
+
+**Given** the tracking indicator text ("Tracking", "Lost")
+**When** it is displayed
+**Then** it uses string resources
+
+**Given** all strings are extracted
+**When** `./gradlew test` runs
+**Then** all tests pass (update test assertions if they match on hardcoded text)
+
+### Story 9.4: Camera & FrameAnalyzer Lifecycle Management
+
+As a developer,
+I want CameraXManager and FrameAnalyzer to properly release resources on lifecycle events,
+So that executor threads and coroutine scopes do not leak across activity recreations.
+
+**Context:** Adversarial review findings #10 (`analysisExecutor` thread never shut down — orphan threads accumulate on activity recreation) and #11 (`FrameAnalyzer.snapshotScope` never cancelled when injected as Koin singleton).
+
+**Acceptance Criteria:**
+
+**Given** `CameraXManager` is destroyed (activity recreation or ViewModel cleared)
+**When** cleanup runs
+**Then** the `analysisExecutor` is shut down and no orphan thread remains
+
+**Given** `FrameAnalyzer` is injected as a Koin singleton
+**When** the ViewModel that uses it is cleared
+**Then** the `snapshotScope` is cancelled and no coroutine leaks
+
+**Given** the camera is unbound and rebound (e.g., returning from settings)
+**When** the new bind completes
+**Then** the executor is reused (not a new thread created) — no thread accumulation
+
+**Given** lifecycle cleanup is implemented
+**When** all existing tests run
+**Then** all tests still pass with no regressions

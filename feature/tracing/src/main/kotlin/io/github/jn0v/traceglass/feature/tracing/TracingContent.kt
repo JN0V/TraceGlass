@@ -46,7 +46,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -106,6 +105,7 @@ internal fun TracingContent(
     onToggleSession: () -> Unit,
     onToggleControlsVisibility: () -> Unit,
     trackingState: TrackingState,
+    previousTrackingState: TrackingState = TrackingState.INACTIVE,
     showBreakReminder: Boolean,
     audioFeedbackEnabled: Boolean,
     onBreakReminderDismissed: () -> Unit,
@@ -209,17 +209,15 @@ internal fun TracingContent(
         }
     }
 
-    val prevTrackingState = remember { mutableStateOf(TrackingState.INACTIVE) }
     LaunchedEffect(trackingState) {
         if (audioFeedbackEnabled) {
             when {
-                prevTrackingState.value == TrackingState.TRACKING && trackingState == TrackingState.LOST ->
+                previousTrackingState == TrackingState.TRACKING && trackingState == TrackingState.LOST ->
                     audioPlayer.playTrackingLostTone()
-                prevTrackingState.value == TrackingState.LOST && trackingState == TrackingState.TRACKING ->
+                previousTrackingState == TrackingState.LOST && trackingState == TrackingState.TRACKING ->
                     audioPlayer.playTrackingGainedTone()
             }
         }
-        prevTrackingState.value = trackingState
     }
 
     val window = context.findActivity()?.window

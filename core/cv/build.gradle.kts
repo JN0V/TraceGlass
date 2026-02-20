@@ -5,13 +5,13 @@ plugins {
 
 android {
     namespace = "io.github.jn0v.traceglass.core.cv"
-    ndkVersion = "27.2.12479018"
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
         consumerProguardFiles("proguard-rules.pro")
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
         }
 
         externalNativeBuild {
@@ -19,7 +19,8 @@ android {
                 cppFlags += "-std=c++17"
                 arguments += listOf(
                     "-DANDROID_STL=c++_shared",
-                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
+                    "-DOpenCV_DIR=${project.rootDir}/sdk/OpenCV-android-sdk/sdk/native/jni"
                 )
             }
         }

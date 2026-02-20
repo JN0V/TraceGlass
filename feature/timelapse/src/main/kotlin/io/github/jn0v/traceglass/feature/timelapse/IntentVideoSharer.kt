@@ -1,8 +1,10 @@
 package io.github.jn0v.traceglass.feature.timelapse
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import io.github.jn0v.traceglass.core.timelapse.VideoSharer
 
 class IntentVideoSharer(private val context: Context) : VideoSharer {
@@ -16,6 +18,10 @@ class IntentVideoSharer(private val context: Context) : VideoSharer {
         }
         val chooser = Intent.createChooser(shareIntent, "Share time-lapse")
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(chooser)
+        try {
+            context.startActivity(chooser)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("IntentVideoSharer", "No app available to handle share intent", e)
+        }
     }
 }
