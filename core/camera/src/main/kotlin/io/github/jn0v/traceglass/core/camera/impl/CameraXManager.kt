@@ -31,6 +31,7 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
     private val analysisExecutor = Executors.newSingleThreadExecutor()
+    @Volatile private var closed = false
 
     private val _isCameraReady = MutableStateFlow(false)
     override val isCameraReady: StateFlow<Boolean> = _isCameraReady.asStateFlow()
@@ -59,6 +60,10 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
         surfaceProvider: Preview.SurfaceProvider,
         imageAnalyzer: ImageAnalysis.Analyzer?
     ) {
+        if (closed) {
+            Log.w(TAG, "bindPreview called after close()")
+            return
+        }
         val future = ProcessCameraProvider.getInstance(context)
         _cameraError.value = null
         future.addListener({
@@ -130,6 +135,13 @@ class CameraXManager(private val context: Context) : CameraManager, FlashlightCo
         storedSensorWidthMm = null
         actualAnalysisWidth = ANALYSIS_TARGET_WIDTH
         // Don't shutdown analysisExecutor — it's reused across bind/unbind cycles
+    }
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        unbind()
+        analysisExecutor.shutdown()
     }
 
     override fun toggleTorch() {

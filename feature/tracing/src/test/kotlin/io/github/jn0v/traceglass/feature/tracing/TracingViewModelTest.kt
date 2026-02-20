@@ -2825,4 +2825,5 @@ private class FakeCameraManagerForTest : CameraManager {
 
     override fun unbind() {}
     override fun reapplyZoom() {}
+    override fun close() { unbind() }
 }

@@ -12,6 +12,8 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import org.junit.jupiter.api.AfterEach
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.isActive
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -185,6 +187,39 @@ class FrameAnalyzerTest {
             // The callback is cleared to null before toBitmap() is called,
             // so even if toBitmap() fails, the callback is consumed
             assertNull(analyzer.snapshotCallback)
+        }
+    }
+
+    @Nested
+    inner class Lifecycle {
+        @Test
+        fun `close() cancels snapshotScope`() {
+            val field = FrameAnalyzer::class.java.getDeclaredField("snapshotScope")
+            field.isAccessible = true
+            val scope = field.get(analyzer) as CoroutineScope
+
+            assertTrue(scope.isActive)
+
+            analyzer.close()
+
+            assertFalse(scope.isActive)
+        }
+
+        @Test
+        fun `analyze still works after close without throwing`() {
+            analyzer.close()
+
+            // Detection should still work (scope is dead but analyze() doesn't use it
+            // unless a snapshot callback is set)
+            fakeDetector.resultToReturn = MarkerResult(
+                listOf(DetectedMarker(0, 50f, 50f, emptyList(), 1f)),
+                1L, 640, 480
+            )
+            val image = createMockImageProxy()
+            analyzer.analyze(image)
+
+            assertTrue(analyzer.latestResult.value.isTracking)
+            verify { image.close() }
         }
     }
 
