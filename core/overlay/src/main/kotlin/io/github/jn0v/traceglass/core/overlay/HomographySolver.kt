@@ -303,11 +303,16 @@ object HomographySolver {
 
         val hFinal = reconstructH(p0, d7, d8, h7, h8)
         val (f1, f2) = evalConstraints(hFinal, fd, cxd, cyd)
-        if (abs(f1) > 1e-4 || abs(f2) > 1e-4) return null
+        // NaN guard: IEEE 754 comparisons with NaN return false, so explicit check needed
+        if (f1.isNaN() || f2.isNaN() || abs(f1) > 1e-4 || abs(f2) > 1e-4) return null
 
         val result = FloatArray(9)
         for (i in 0..7) result[i] = hFinal[i].toFloat()
         result[8] = 1f
+
+        // Reject NaN/Inf in result (matches solveHomography's validation)
+        if (result.any { it.isNaN() || it.isInfinite() }) return null
+
         return result
     }
 

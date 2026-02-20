@@ -96,7 +96,11 @@ class OverlayTransformCalculator(
             val tl = detected[0]!!; val tr = detected[1]!!
             val br = detected[2]!!; val bl = detected[3]!!
             calibratedPaperCorners = listOf(tl, tr, br, bl)
-            calibratedFocalLength = null
+            // Preserve user-provided focal length from setFocalLength() if already set;
+            // only clear auto-estimated values (which are invalid for a new reference).
+            if (calibratedFocalLength != null) {
+                needsRebuildPaperCoords = true
+            }
 
             val w = (dist(tl, tr) + dist(bl, br)) / 2f
             val h = (dist(tl, bl) + dist(tr, br)) / 2f
@@ -195,8 +199,8 @@ class OverlayTransformCalculator(
         missingIds: Set<Int>,
         prev: Map<Int, Pair<Float, Float>>,
         smooth: MutableMap<Int, Pair<Float, Float>>,
-        frameWidth: Float = 0f,
-        frameHeight: Float = 0f
+        frameWidth: Float,
+        frameHeight: Float
     ) {
         when {
             visibleIds.size >= 3 -> {
@@ -247,6 +251,7 @@ class OverlayTransformCalculator(
                     smooth[id] = Pair(p.first + tx, p.second + ty)
                 }
             }
+            // 0 visible: hold last known positions (smooth unchanged)
         }
     }
 
