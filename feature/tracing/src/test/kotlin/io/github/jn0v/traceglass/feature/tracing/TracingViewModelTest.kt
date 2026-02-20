@@ -76,22 +76,49 @@ class TracingViewModelTest {
         videoExporter: VideoExporter? = null,
         videoSharer: VideoSharer? = null,
         cacheDir: File? = null
-    ) = TracingViewModel(
-        flashlightController = flashlightController,
-        trackingStateManager = trackingStateManager ?: TrackingStateManager(),
-        sessionRepository = sessionRepository,
-        settingsRepository = settingsRepository,
-        transformCalculator = transformCalculator ?: OverlayTransformCalculator(smoothingFactor = 1f),
-        cameraManager = cameraManager,
-        snapshotStorage = snapshotStorage,
-        frameAnalyzer = frameAnalyzer,
-        timelapseCompiler = timelapseCompiler,
-        videoExporter = videoExporter,
-        videoSharer = videoSharer,
-        cacheDir = cacheDir,
-        ioDispatcher = testDispatcher,
-        mainDispatcher = testDispatcher
-    )
+    ): TracingViewModel {
+        val timelapseOps = if (snapshotStorage != null && timelapseCompiler != null && cacheDir != null) {
+            TimelapseOperations(
+                snapshotStorage = snapshotStorage,
+                compiler = timelapseCompiler,
+                exporter = videoExporter ?: mockk(relaxed = true),
+                sharer = videoSharer ?: mockk(relaxed = true),
+                cacheDir = cacheDir
+            )
+        } else if (snapshotStorage != null) {
+            // Partial: only storage provided (for start/pause/resume tests that don't compile)
+            TimelapseOperations(
+                snapshotStorage = snapshotStorage,
+                compiler = timelapseCompiler ?: mockk(relaxed = true),
+                exporter = videoExporter ?: mockk(relaxed = true),
+                sharer = videoSharer ?: mockk(relaxed = true),
+                cacheDir = cacheDir ?: File(System.getProperty("java.io.tmpdir"))
+            )
+        } else if (videoExporter != null) {
+            // Export-only test
+            TimelapseOperations(
+                snapshotStorage = mockk(relaxed = true),
+                compiler = timelapseCompiler ?: mockk(relaxed = true),
+                exporter = videoExporter,
+                sharer = videoSharer ?: mockk(relaxed = true),
+                cacheDir = cacheDir ?: File(System.getProperty("java.io.tmpdir"))
+            )
+        } else {
+            null
+        }
+        return TracingViewModel(
+            flashlightController = flashlightController,
+            trackingStateManager = trackingStateManager ?: TrackingStateManager(),
+            sessionRepository = sessionRepository,
+            settingsRepository = settingsRepository,
+            transformCalculator = transformCalculator ?: OverlayTransformCalculator(smoothingFactor = 1f),
+            cameraManager = cameraManager,
+            frameAnalyzer = frameAnalyzer,
+            timelapseOps = timelapseOps,
+            ioDispatcher = testDispatcher,
+            mainDispatcher = testDispatcher
+        )
+    }
 
     private fun markerWithCorners(
         id: Int, cx: Float, cy: Float,

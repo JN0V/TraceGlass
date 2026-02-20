@@ -16,7 +16,11 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -25,7 +29,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 
 @Composable
 fun OpacityFab(
@@ -35,10 +38,15 @@ fun OpacityFab(
     onOpacityChanged: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Auto-collapse: key on isSliderVisible only; debounce opacity changes
+    // so each slider drag doesn't restart the 3s timer independently
+    val opacityState = rememberUpdatedState(opacity)
+    @OptIn(FlowPreview::class)
     if (isSliderVisible) {
-        LaunchedEffect(isSliderVisible, opacity) {
-            delay(3000)
-            onToggleSlider()
+        LaunchedEffect(isSliderVisible) {
+            snapshotFlow { opacityState.value }
+                .debounce(3000)
+                .collect { onToggleSlider() }
         }
     }
 

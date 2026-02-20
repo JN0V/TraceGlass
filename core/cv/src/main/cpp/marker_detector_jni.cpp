@@ -10,13 +10,11 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-// Helper: throw RuntimeException and return nullptr on JNI lookup failure
-#define JNI_CHECK_NULL(ptr, env, msg) \
+// Helper: log + return JNI_ERR on JNI lookup failure (for use in JNI_OnLoad)
+#define JNI_LOAD_CHECK(ptr, msg) \
     if ((ptr) == nullptr) { \
-        LOGE("JNI lookup failed: %s", (msg)); \
-        jclass rte = (env)->FindClass("java/lang/RuntimeException"); \
-        if (rte) (env)->ThrowNew(rte, (msg)); \
-        return nullptr; \
+        LOGE("JNI_OnLoad lookup failed: %s", (msg)); \
+        return JNI_ERR; \
     }
 
 // Cached ArUco detector — single-threaded (CameraX analysis executor)
@@ -46,29 +44,40 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void * /*reserved*/) {
     jclass cls;
 
     cls = env->FindClass("java/util/ArrayList");
+    JNI_LOAD_CHECK(cls, "ArrayList class");
     g_listClass = (jclass)env->NewGlobalRef(cls);
     g_listInit = env->GetMethodID(g_listClass, "<init>", "()V");
+    JNI_LOAD_CHECK(g_listInit, "ArrayList.<init>");
     g_listAdd = env->GetMethodID(g_listClass, "add", "(Ljava/lang/Object;)Z");
+    JNI_LOAD_CHECK(g_listAdd, "ArrayList.add");
     env->DeleteLocalRef(cls);
 
     cls = env->FindClass("kotlin/Pair");
+    JNI_LOAD_CHECK(cls, "Pair class");
     g_pairClass = (jclass)env->NewGlobalRef(cls);
     g_pairInit = env->GetMethodID(g_pairClass, "<init>", "(Ljava/lang/Object;Ljava/lang/Object;)V");
+    JNI_LOAD_CHECK(g_pairInit, "Pair.<init>");
     env->DeleteLocalRef(cls);
 
     cls = env->FindClass("java/lang/Float");
+    JNI_LOAD_CHECK(cls, "Float class");
     g_floatClass = (jclass)env->NewGlobalRef(cls);
     g_floatInit = env->GetMethodID(g_floatClass, "<init>", "(F)V");
+    JNI_LOAD_CHECK(g_floatInit, "Float.<init>");
     env->DeleteLocalRef(cls);
 
     cls = env->FindClass("io/github/jn0v/traceglass/core/cv/DetectedMarker");
+    JNI_LOAD_CHECK(cls, "DetectedMarker class");
     g_markerClass = (jclass)env->NewGlobalRef(cls);
     g_markerInit = env->GetMethodID(g_markerClass, "<init>", "(IFFLjava/util/List;F)V");
+    JNI_LOAD_CHECK(g_markerInit, "DetectedMarker.<init>");
     env->DeleteLocalRef(cls);
 
     cls = env->FindClass("io/github/jn0v/traceglass/core/cv/MarkerResult");
+    JNI_LOAD_CHECK(cls, "MarkerResult class");
     g_resultClass = (jclass)env->NewGlobalRef(cls);
     g_resultInit = env->GetMethodID(g_resultClass, "<init>", "(Ljava/util/List;JII)V");
+    JNI_LOAD_CHECK(g_resultInit, "MarkerResult.<init>");
     env->DeleteLocalRef(cls);
 
     LOGD("JNI_OnLoad: cached class/method IDs");
@@ -95,10 +104,17 @@ Java_io_github_jn0v_traceglass_core_cv_impl_OpenCvMarkerDetector_nativeDetect(
 ) {
     auto startTime = std::chrono::steady_clock::now();
 
+    // Validate input dimensions
+    if (width <= 0 || height <= 0 || rowStride <= 0 || rowStride < width) {
+        LOGE("Invalid dimensions: w=%d h=%d stride=%d", width, height, rowStride);
+        return createEmptyResult(env);
+    }
+
     // Get frame buffer
     auto *bufferAddr = static_cast<uint8_t *>(env->GetDirectBufferAddress(byteBuffer));
     if (bufferAddr == nullptr) {
         LOGE("Failed to get buffer address");
+        if (env->ExceptionCheck()) env->ExceptionClear();
         return createEmptyResult(env);
     }
 
@@ -134,11 +150,17 @@ Java_io_github_jn0v_traceglass_core_cv_impl_OpenCvMarkerDetector_nativeDetect(
 
     // Build Java result objects using cached class/method IDs
     jobject markerList = env->NewObject(g_listClass, g_listInit);
+    if (markerList == nullptr || env->ExceptionCheck()) {
+        LOGE("Failed to create marker list");
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return createEmptyResult(env);
+    }
 
     for (size_t i = 0; i < ids.size(); i++) {
         // Compute center
         float cx = 0, cy = 0;
         jobject cornerList = env->NewObject(g_listClass, g_listInit);
+        if (cornerList == nullptr) break;
 
         for (int j = 0; j < 4; j++) {
             cx += corners[i][j].x;
@@ -147,21 +169,32 @@ Java_io_github_jn0v_traceglass_core_cv_impl_OpenCvMarkerDetector_nativeDetect(
             jobject fx = env->NewObject(g_floatClass, g_floatInit, corners[i][j].x);
             jobject fy = env->NewObject(g_floatClass, g_floatInit, corners[i][j].y);
             jobject pair = env->NewObject(g_pairClass, g_pairInit, fx, fy);
-            env->CallBooleanMethod(cornerList, g_listAdd, pair);
+            if (fx != nullptr && fy != nullptr && pair != nullptr) {
+                env->CallBooleanMethod(cornerList, g_listAdd, pair);
+            }
 
-            env->DeleteLocalRef(fx);
-            env->DeleteLocalRef(fy);
-            env->DeleteLocalRef(pair);
+            if (fx) env->DeleteLocalRef(fx);
+            if (fy) env->DeleteLocalRef(fy);
+            if (pair) env->DeleteLocalRef(pair);
         }
         cx /= 4.0f;
         cy /= 4.0f;
 
         jobject marker = env->NewObject(g_markerClass, g_markerInit,
             ids[i], cx, cy, cornerList, 1.0f);
-        env->CallBooleanMethod(markerList, g_listAdd, marker);
+        if (marker != nullptr) {
+            env->CallBooleanMethod(markerList, g_listAdd, marker);
+        }
 
         env->DeleteLocalRef(cornerList);
-        env->DeleteLocalRef(marker);
+        if (marker) env->DeleteLocalRef(marker);
+
+        // Check for accumulated JNI exceptions after each marker
+        if (env->ExceptionCheck()) {
+            LOGE("JNI exception during marker %zu construction", i);
+            env->ExceptionClear();
+            break;
+        }
     }
 
     // Effective dimensions after rotation
@@ -171,7 +204,24 @@ Java_io_github_jn0v_traceglass_core_cv_impl_OpenCvMarkerDetector_nativeDetect(
     jobject result = env->NewObject(g_resultClass, g_resultInit, markerList, (jlong)durationMs,
         effectiveWidth, effectiveHeight);
 
+    env->DeleteLocalRef(markerList);
+
     return result;
 }
 
 } // extern "C"
+
+extern "C" JNIEXPORT void JNI_OnUnload(JavaVM *vm, void * /*reserved*/) {
+    JNIEnv *env;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        return;
+    }
+
+    if (g_listClass) { env->DeleteGlobalRef(g_listClass); g_listClass = nullptr; }
+    if (g_pairClass) { env->DeleteGlobalRef(g_pairClass); g_pairClass = nullptr; }
+    if (g_floatClass) { env->DeleteGlobalRef(g_floatClass); g_floatClass = nullptr; }
+    if (g_markerClass) { env->DeleteGlobalRef(g_markerClass); g_markerClass = nullptr; }
+    if (g_resultClass) { env->DeleteGlobalRef(g_resultClass); g_resultClass = nullptr; }
+
+    LOGD("JNI_OnUnload: deleted global refs");
+}

@@ -15,6 +15,11 @@ subprojects {
                 sourceCompatibility = JavaVersion.VERSION_17
                 targetCompatibility = JavaVersion.VERSION_17
             }
+            lint {
+                abortOnError = true
+                warningsAsErrors = false
+                checkDependencies = false
+            }
         }
     }
     pluginManager.withPlugin("com.android.application") {
@@ -25,6 +30,11 @@ subprojects {
             compileOptions {
                 sourceCompatibility = JavaVersion.VERSION_17
                 targetCompatibility = JavaVersion.VERSION_17
+            }
+            lint {
+                abortOnError = true
+                warningsAsErrors = false
+                checkDependencies = true
             }
         }
     }

@@ -147,6 +147,7 @@ fun TracingScreen(
                 onToggleSession = viewModel::onToggleSession,
                 onToggleControlsVisibility = viewModel::onToggleControlsVisibility,
                 trackingState = uiState.trackingState,
+                previousTrackingState = uiState.previousTrackingState,
                 showBreakReminder = uiState.showBreakReminder,
                 audioFeedbackEnabled = uiState.audioFeedbackEnabled,
                 onBreakReminderDismissed = viewModel::onBreakReminderDismissed,

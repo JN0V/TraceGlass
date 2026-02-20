@@ -5,6 +5,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.util.Log
 import io.github.jn0v.traceglass.core.timelapse.CompilationResult
 import io.github.jn0v.traceglass.core.timelapse.TimelapseCompiler
 import kotlinx.coroutines.Dispatchers
@@ -51,8 +52,16 @@ class MediaCodecCompiler : TimelapseCompiler {
             val frameDurationUs = 1_000_000L / fps
 
             try {
+                var skippedFrames = 0
+                var encodedIndex = 0
                 for ((i, file) in snapshotFiles.withIndex()) {
-                    val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: continue
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                    if (bitmap == null) {
+                        skippedFrames++
+                        Log.w("MediaCodecCompiler", "Skipped corrupt frame: ${file.name}")
+                        onProgress((i + 1).toFloat() / snapshotFiles.size)
+                        continue
+                    }
                     val canvas = inputSurface.lockCanvas(null)
                     canvas.drawColor(android.graphics.Color.BLACK)
                     val scaleX = canvas.width.toFloat() / bitmap.width
@@ -63,22 +72,27 @@ class MediaCodecCompiler : TimelapseCompiler {
                     bitmap.recycle()
 
                     drainEncoder(codec, bufferInfo, muxer, trackIndex, muxerStarted,
-                        presentationTimeUs = i.toLong() * frameDurationUs) { track, started ->
+                        presentationTimeUs = encodedIndex.toLong() * frameDurationUs) { track, started ->
                         trackIndex = track
                         muxerStarted = started
                     }
+                    encodedIndex++
 
                     onProgress((i + 1).toFloat() / snapshotFiles.size)
                 }
 
+                if (skippedFrames > 0) {
+                    Log.w("MediaCodecCompiler", "Compilation skipped $skippedFrames of ${snapshotFiles.size} frames")
+                }
+
                 codec.signalEndOfInputStream()
                 drainEncoder(codec, bufferInfo, muxer, trackIndex, muxerStarted, drainAll = true,
-                    presentationTimeUs = snapshotFiles.size.toLong() * frameDurationUs) { track, started ->
+                    presentationTimeUs = encodedIndex.toLong() * frameDurationUs) { track, started ->
                     trackIndex = track
                     muxerStarted = started
                 }
 
-                CompilationResult.Success(outputFile)
+                CompilationResult.Success(outputFile, skippedFrames = skippedFrames)
             } finally {
                 try { codec.stop() } catch (_: Exception) {}
                 codec.release()

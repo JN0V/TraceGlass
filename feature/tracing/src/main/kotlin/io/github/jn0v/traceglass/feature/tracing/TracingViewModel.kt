@@ -18,12 +18,8 @@ import io.github.jn0v.traceglass.core.session.SessionRepository
 import io.github.jn0v.traceglass.core.session.SettingsRepository
 import io.github.jn0v.traceglass.core.timelapse.CompilationResult
 import io.github.jn0v.traceglass.core.timelapse.ExportResult
-import io.github.jn0v.traceglass.core.timelapse.SnapshotStorage
-import io.github.jn0v.traceglass.core.timelapse.TimelapseCompiler
 import io.github.jn0v.traceglass.core.timelapse.TimelapseSession
 import io.github.jn0v.traceglass.core.timelapse.TimelapseState
-import io.github.jn0v.traceglass.core.timelapse.VideoExporter
-import io.github.jn0v.traceglass.core.timelapse.VideoSharer
 import java.util.concurrent.atomic.AtomicBoolean
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -49,15 +45,18 @@ class TracingViewModel(
     private val sessionRepository: SessionRepository,
     private val settingsRepository: SettingsRepository,
     private val cameraManager: CameraManager? = null,
-    private val snapshotStorage: SnapshotStorage? = null,
     private val frameAnalyzer: FrameAnalyzer? = null,
-    private val timelapseCompiler: TimelapseCompiler? = null,
-    private val videoExporter: VideoExporter? = null,
-    private val videoSharer: VideoSharer? = null,
-    private val cacheDir: java.io.File? = null,
+    private val timelapseOps: TimelapseOperations? = null,
     private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
     private val mainDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Main
 ) : ViewModel() {
+
+    // Convenience accessors for grouped timelapse dependencies
+    private val snapshotStorage get() = timelapseOps?.snapshotStorage
+    private val timelapseCompiler get() = timelapseOps?.compiler
+    private val videoExporter get() = timelapseOps?.exporter
+    private val videoSharer get() = timelapseOps?.sharer
+    private val cacheDir get() = timelapseOps?.cacheDir
 
     private val _uiState = MutableStateFlow(
         TracingUiState(hasFlashlight = flashlightController.hasFlashlight)
@@ -369,6 +368,10 @@ class TracingViewModel(
             )
             when (result) {
                 is CompilationResult.Success -> {
+                    if (result.skippedFrames > 0) {
+                        android.util.Log.w("TracingViewModel",
+                            "Timelapse compiled with ${result.skippedFrames} skipped frame(s)")
+                    }
                     _uiState.update {
                         it.copy(
                             isCompiling = false,
@@ -717,6 +720,7 @@ class TracingViewModel(
 
         _uiState.update {
             it.copy(
+                previousTrackingState = it.trackingState,
                 trackingState = trackingState,
                 detectedMarkerCount = result.markerCount
             )

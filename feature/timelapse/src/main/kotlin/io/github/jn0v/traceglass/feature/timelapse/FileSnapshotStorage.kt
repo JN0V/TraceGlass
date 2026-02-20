@@ -8,8 +8,9 @@ class FileSnapshotStorage(
     private val baseDir: File
 ) : SnapshotStorage {
 
-    private val timelapseDir: File
-        get() = File(baseDir, "timelapse").also { it.mkdirs() }
+    private val timelapseDir: File by lazy {
+        File(baseDir, "timelapse").also { it.mkdirs() }
+    }
 
     private val cachedCount = AtomicInteger(-1)
 

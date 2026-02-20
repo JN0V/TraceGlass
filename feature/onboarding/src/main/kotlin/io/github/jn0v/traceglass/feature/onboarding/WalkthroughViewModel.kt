@@ -27,7 +27,7 @@ class WalkthroughViewModel(
         _uiState.update { it.copy(step = WalkthroughStep.DETECTING_MARKERS, elapsedSeconds = 0) }
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
-            while (true) {
+            while (!_uiState.value.markersDetected) {
                 delay(1000)
                 _uiState.update { state ->
                     val elapsed = state.elapsedSeconds + 1
