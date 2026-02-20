@@ -904,6 +904,126 @@ class OverlayTransformCalculatorTest {
         }
 
         @Test
+        fun `external focal length survives resetReference`() {
+            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
+            calc.setFocalLength(800f)
+            assertEquals(800f, calc.calibratedFocalLengthForTest)
+
+            // resetReference should preserve externally-provided focal length
+            calc.resetReference()
+            assertEquals(800f, calc.calibratedFocalLengthForTest,
+                "External focal length must survive resetReference()")
+        }
+
+        @Test
+        fun `auto-estimated focal length is cleared by resetReference`() {
+            // Set up fronto-parallel reference, then tilt to trigger auto-estimation
+            val corners = listOf(
+                Pair(440f, 77f), Pair(840f, 77f),
+                Pair(840f, 643f), Pair(440f, 643f)
+            )
+            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
+
+            val markers = (0..3).map { id ->
+                val s = 15f
+                val offsets = listOf(Pair(-s, -s), Pair(+s, -s), Pair(+s, +s), Pair(-s, +s))
+                val cx = corners[id].first - offsets[id].first
+                val cy = corners[id].second - offsets[id].second
+                DetectedMarker(id, cx, cy, offsets.map { (dx, dy) -> Pair(cx + dx, cy + dy) }, 1f)
+            }
+            val mr = MarkerResult(markers, 0L, 1280, 720)
+            calc.compute(mr, 1280f, 720f)
+
+            // Tilt to trigger auto-f estimation (fronto-parallel reference)
+            val rad = Math.toRadians(15.0)
+            val cosT = kotlin.math.cos(rad).toFloat()
+            val sinT = kotlin.math.sin(rad).toFloat()
+            val cx = 640f; val cy = 360f
+            val tilted = corners.map { (x, y) ->
+                val dx = x - cx; val dy = y - cy
+                val y3d = dy * cosT; val z3d = -dy * sinT
+                val depth = 800f + z3d
+                if (depth < 1f) Pair(x, y)
+                else Pair(cx + dx * 800f / depth, cy + y3d * 800f / depth)
+            }
+            val tiltedMarkers = (0..3).map { id ->
+                val s = 15f
+                val offsets = listOf(Pair(-s, -s), Pair(+s, -s), Pair(+s, +s), Pair(-s, +s))
+                val mcx = tilted[id].first - offsets[id].first
+                val mcy = tilted[id].second - offsets[id].second
+                DetectedMarker(id, mcx, mcy, offsets.map { (dx, dy) -> Pair(mcx + dx, mcy + dy) }, 1f)
+            }
+            calc.compute(MarkerResult(tiltedMarkers, 0L, 1280, 720), 1280f, 720f)
+            assertNotNull(calc.calibratedFocalLengthForTest, "Auto-f should have been estimated")
+
+            // resetReference should clear auto-estimated focal length
+            calc.resetReference()
+            assertNull(calc.calibratedFocalLengthForTest,
+                "Auto-estimated focal length must be cleared by resetReference()")
+        }
+
+        @Test
+        fun `external focal length works after resetReference and new detection`() {
+            // Full lifecycle: set f → detect → reset → re-detect → hide marker → still works
+            val corners = listOf(
+                Pair(440f, 77f), Pair(840f, 77f),
+                Pair(840f, 643f), Pair(440f, 643f)
+            )
+            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
+            calc.setFocalLength(800f)
+
+            // First reference
+            val markers = (0..3).map { id ->
+                val s = 15f
+                val offsets = listOf(Pair(-s, -s), Pair(+s, -s), Pair(+s, +s), Pair(-s, +s))
+                val cx = corners[id].first - offsets[id].first
+                val cy = corners[id].second - offsets[id].second
+                DetectedMarker(id, cx, cy, offsets.map { (dx, dy) -> Pair(cx + dx, cy + dy) }, 1f)
+            }
+            val mr = MarkerResult(markers, 0L, 1280, 720)
+            calc.compute(mr, 1280f, 720f)
+            calc.compute(mr, 1280f, 720f)
+
+            // Reset tracking
+            calc.resetReference()
+            assertEquals(800f, calc.calibratedFocalLengthForTest)
+
+            // Re-detect all 4 markers (new reference)
+            calc.compute(mr, 1280f, 720f)
+            calc.compute(mr, 1280f, 720f)
+
+            // Tilt and hide one corner — should use preserved f
+            val rad = Math.toRadians(15.0)
+            val cosT = kotlin.math.cos(rad).toFloat()
+            val sinT = kotlin.math.sin(rad).toFloat()
+            val cx = 640f; val cy = 360f
+            val tilted = corners.map { (x, y) ->
+                val dx = x - cx; val dy = y - cy
+                val y3d = dy * cosT; val z3d = -dy * sinT
+                val depth = 800f + z3d
+                if (depth < 1f) Pair(x, y)
+                else Pair(cx + dx * 800f / depth, cy + y3d * 800f / depth)
+            }
+            val tiltedMarkers = (0..3).filter { it != 2 }.map { id ->
+                val s = 15f
+                val offsets = listOf(Pair(-s, -s), Pair(+s, -s), Pair(+s, +s), Pair(-s, +s))
+                val mcx = tilted[id].first - offsets[id].first
+                val mcy = tilted[id].second - offsets[id].second
+                DetectedMarker(id, mcx, mcy, offsets.map { (dx, dy) -> Pair(mcx + dx, mcy + dy) }, 1f)
+            }
+            val result = calc.compute(
+                MarkerResult(tiltedMarkers, 0L, 1280, 720), 1280f, 720f
+            )
+            val estimated = result.paperCornersFrame!!
+            val err = sqrt(
+                (tilted[2].first - estimated[2].first).let { it * it } +
+                (tilted[2].second - estimated[2].second).let { it * it }
+            )
+            assertTrue(err < 10f,
+                "External f after reset+re-detect: hidden corner error=${err}px (expected <10)")
+        }
+
+        @Test
         fun `setFocalLength before first detection is preserved`() {
             // Finding #2: setFocalLength called before 4-marker init must not be lost
             val corners = listOf(

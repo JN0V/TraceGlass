@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.jn0v.traceglass.core.camera.CameraManager
 import io.github.jn0v.traceglass.core.camera.FlashlightController
 import io.github.jn0v.traceglass.core.cv.MarkerResult
 import io.github.jn0v.traceglass.core.overlay.HomographySolver
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
@@ -46,6 +48,7 @@ class TracingViewModel(
     private val trackingStateManager: TrackingStateManager = TrackingStateManager(),
     private val sessionRepository: SessionRepository,
     private val settingsRepository: SettingsRepository,
+    private val cameraManager: CameraManager? = null,
     private val snapshotStorage: SnapshotStorage? = null,
     private val frameAnalyzer: FrameAnalyzer? = null,
     private val timelapseCompiler: TimelapseCompiler? = null,
@@ -115,6 +118,11 @@ class TracingViewModel(
                 }
             }
             .launchIn(viewModelScope)
+
+        cameraManager?.focalLengthPixels
+            ?.filterNotNull()
+            ?.onEach { f -> transformCalculator.setFocalLength(f) }
+            ?.launchIn(viewModelScope)
     }
 
     override fun onCleared() {
