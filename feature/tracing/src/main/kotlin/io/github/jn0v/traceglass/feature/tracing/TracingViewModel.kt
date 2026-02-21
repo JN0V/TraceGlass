@@ -125,10 +125,6 @@ class TracingViewModel(
             }
             .launchIn(viewModelScope)
 
-        cameraManager?.focalLengthPixels
-            ?.filterNotNull()
-            ?.onEach { f -> transformCalculator.setFocalLength(f) }
-            ?.launchIn(viewModelScope)
     }
 
     override fun onCleared() {
