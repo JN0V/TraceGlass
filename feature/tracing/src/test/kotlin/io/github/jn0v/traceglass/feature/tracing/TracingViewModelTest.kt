@@ -70,7 +70,7 @@ class TracingViewModelTest {
         sessionRepository: SessionRepository = FakeSessionRepository(),
         settingsRepository: FakeSettingsRepository = FakeSettingsRepository(),
         transformCalculator: OverlayTransformCalculator? = null,
-        cameraManager: FakeCameraManagerForTest? = null,
+        cameraManager: CameraManager? = null,
         snapshotStorage: SnapshotStorage? = null,
         frameAnalyzer: FrameAnalyzer? = null,
         timelapseCompiler: TimelapseCompiler? = null,
@@ -2616,86 +2616,6 @@ class TracingViewModelTest {
         }
     }
 
-    @Nested
-    inner class FocalLengthInjection {
-
-        @Test
-        fun `focal length from camera manager reaches transform calculator`() = runTest {
-            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
-            val fakeCam = FakeCameraManagerForTest()
-            val vm = createViewModel(
-                transformCalculator = calc,
-                cameraManager = fakeCam
-            )
-            testDispatcher.scheduler.runCurrent()
-
-            // Emit focal length
-            fakeCam.mutableFocalLengthPixels.value = 931f
-            testDispatcher.scheduler.runCurrent()
-
-            // setFocalLength should have been called — verify via its effect
-            assertEquals(931f, calc.calibratedFocalLengthForTest)
-
-            vm.viewModelScope.cancel()
-        }
-
-        @Test
-        fun `null focal length does not call setFocalLength`() = runTest {
-            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
-            val fakeCam = FakeCameraManagerForTest()
-            val vm = createViewModel(
-                transformCalculator = calc,
-                cameraManager = fakeCam
-            )
-            testDispatcher.scheduler.runCurrent()
-
-            // Emit null — should be filtered
-            fakeCam.mutableFocalLengthPixels.value = null
-            testDispatcher.scheduler.runCurrent()
-
-            // calibratedFocalLength should remain null
-            assertNull(calc.calibratedFocalLengthForTest)
-
-            vm.viewModelScope.cancel()
-        }
-
-        @Test
-        fun `focal length updates when re-emitted`() = runTest {
-            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
-            val fakeCam = FakeCameraManagerForTest()
-            val vm = createViewModel(
-                transformCalculator = calc,
-                cameraManager = fakeCam
-            )
-            testDispatcher.scheduler.runCurrent()
-
-            fakeCam.mutableFocalLengthPixels.value = 931f
-            testDispatcher.scheduler.runCurrent()
-            assertEquals(931f, calc.calibratedFocalLengthForTest)
-
-            // Zoom change → new focal length
-            fakeCam.mutableFocalLengthPixels.value = 465f
-            testDispatcher.scheduler.runCurrent()
-            assertEquals(465f, calc.calibratedFocalLengthForTest)
-
-            vm.viewModelScope.cancel()
-        }
-
-        @Test
-        fun `no camera manager injected does not crash`() = runTest {
-            val calc = OverlayTransformCalculator(smoothingFactor = 1f)
-            val vm = createViewModel(
-                transformCalculator = calc,
-                cameraManager = null
-            )
-            testDispatcher.scheduler.runCurrent()
-
-            // No crash, and focal length remains null
-            assertNull(calc.calibratedFocalLengthForTest)
-
-            vm.viewModelScope.cancel()
-        }
-    }
 }
 
 private class FakeFlashlightController(
@@ -2805,25 +2725,3 @@ private class FakeVideoSharer {
     }
 }
 
-// TODO: Deduplicate with core/camera/src/test/.../FakeCameraManager once
-//  cross-module test fixtures are set up (Gradle java-test-fixtures plugin).
-private class FakeCameraManagerForTest : CameraManager {
-    private val _isCameraReady = MutableStateFlow(false)
-    override val isCameraReady: StateFlow<Boolean> = _isCameraReady.asStateFlow()
-
-    private val _cameraError = MutableStateFlow<String?>(null)
-    override val cameraError: StateFlow<String?> = _cameraError.asStateFlow()
-
-    val mutableFocalLengthPixels = MutableStateFlow<Float?>(null)
-    override val focalLengthPixels: StateFlow<Float?> = mutableFocalLengthPixels.asStateFlow()
-
-    override fun bindPreview(
-        lifecycleOwner: androidx.lifecycle.LifecycleOwner,
-        surfaceProvider: androidx.camera.core.Preview.SurfaceProvider,
-        imageAnalyzer: androidx.camera.core.ImageAnalysis.Analyzer?
-    ) {}
-
-    override fun unbind() {}
-    override fun reapplyZoom() {}
-    override fun close() { unbind() }
-}

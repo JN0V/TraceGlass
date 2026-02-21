@@ -1,6 +1,15 @@
 # Story 8.4: CameraX Intrinsics Integration
 
-Status: review
+Status: deferred
+
+> **Deferred (2026-02-21):** CameraX focal length injection caused a tracking regression
+> on multi-camera devices (Pixel 9 Pro). `LENS_INFO_AVAILABLE_FOCAL_LENGTHS` reports the
+> main lens focal length even when `setWidestZoom(minZoomRatio)` switches to the ultra-wide
+> physical camera, producing an incorrect f_pixels value. This corrupted `rebuildPaperCoords()`
+> and broke the constrained homography pipeline. All 8-4 code (FocalLengthCalculator,
+> CameraXManager emission, ViewModel wiring, setFocalLength API, related tests) has been
+> removed. Auto-estimation from marker geometry is sufficient for current use cases.
+> To revisit: query the active physical camera's intrinsics, not the logical camera's default.
 
 ## Story
 

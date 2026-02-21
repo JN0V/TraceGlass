@@ -9,7 +9,6 @@ import java.io.Closeable
 interface CameraManager : Closeable {
     val isCameraReady: StateFlow<Boolean>
     val cameraError: StateFlow<String?>
-    val focalLengthPixels: StateFlow<Float?>
     fun bindPreview(
         lifecycleOwner: LifecycleOwner,
         surfaceProvider: Preview.SurfaceProvider,
