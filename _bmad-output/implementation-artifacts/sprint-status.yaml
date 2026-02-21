@@ -72,8 +72,8 @@ development_status:
   # Epic 4: Time-lapse Capture & Sharing
   # Isolated implementations + unit tests exist (40 tests pass).
   # Story files created 2026-02-17 — focus on WIRING: DI, ViewModel, FrameAnalyzer, UI.
-  epic-4: in-progress
-  4-1-automatic-snapshot-capture: review # Code review: 8/12 fixed (C1,H1,H2,H3,H4,M1,M2,M3), 3 deferred tech debt (C2,L1,L2)
+  epic-4: done
+  4-1-automatic-snapshot-capture: done # Code review: 8/12 fixed (C1,H1,H2,H3,H4,M1,M2,M3), 3 deferred tech debt (C2,L1,L2)
   4-2-mp4-video-compilation: done # Code review passed: architecture violation fixed (core:timelapse module), concurrent guard, injectable dispatchers, deprecated API fix. 8 tests.
   4-3-timelapse-export-sharing: done # Code review passed: M1 dedup export, M2 async discard, M5 a11y, L1 DateTimeFormatter. 1 LOW deferred (L3 dialog layout). 172 tests.
   4-4-timelapse-snapshot-preservation: done # Code review passed: H1 phantom restore guard, H2 main-thread I/O, M2 unused param, M3 stale-snapshot test. 1 MEDIUM deferred (M1 3-option dialog). 180 tests.
@@ -90,10 +90,10 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Onboarding & Setup Guides
-  epic-6: in-progress
+  epic-6: done
   6-1-onboarding-carousel: done
   6-2-interactive-camera-walkthrough: done # Code review passed: H1 i18n strings, M3 analyzer tests, M4 URI fallback fix. 4 LOW deferred (L1-L4).
-  6-3-setup-guides-external-links: review # Fixed: external link buttons enabled with LocalUriHandler.openUri(). 768 tests pass.
+  6-3-setup-guides-external-links: done # Fixed: external link buttons enabled with LocalUriHandler.openUri(). 768 tests pass.
   6-4-onboarding-flow-control: done
   epic-6-retrospective: optional
 
@@ -105,18 +105,18 @@ development_status:
   epic-7-retrospective: optional
 
   # Epic 8: Advanced Tracking & Perspective
-  epic-8: in-progress
+  epic-8: done
   8-1-perspective-correction: done # Homography solver, MatrixUtils, paper-mapping rendering, settings toggle
-  8-2-paper-size-agnostic-4-marker-reference: done # 4 ArUco markers, auto-f estimation, AR correction, setFocalLength API
+  8-2-paper-size-agnostic-4-marker-reference: done # 4 ArUco markers, auto-f estimation, AR correction
   8-3-3-marker-constrained-homography: done # Newton-Raphson constrained H, delta fallback hierarchy, sub-5px at 20°
-  8-4-camerax-intrinsics-integration: review # Wire CameraX focal length → setFocalLength()
+  8-4-camerax-intrinsics-integration: deferred # CameraX focal length incorrect on multi-cam (zoom/lens mismatch). Auto-estimation from markers sufficient. Dead code removed.
   epic-8-retrospective: optional
 
   # Epic 9: Robustness & Code Health
   # Cross-cutting hardening from adversarial code review (thread safety, state, i18n, lifecycle)
-  epic-9: backlog
-  9-1-overlay-transform-thread-safety: backlog
-  9-2-tracing-viewmodel-state-management: backlog
-  9-3-i18n-hardcoded-strings: backlog
-  9-4-camera-frame-analyzer-lifecycle: backlog
+  epic-9: done
+  9-1-overlay-transform-thread-safety: done # @Volatile, batch-apply, null-safe guards (750c1d1)
+  9-2-tracing-viewmodel-state-management: done # AtomicReference RestoreState, safe primitives (c0f2d87)
+  9-3-i18n-hardcoded-strings: done # All hardcoded strings → strings.xml (69c1442)
+  9-4-camera-frame-analyzer-lifecycle: done # FrameAnalyzer.close(), CameraXManager.close(), executor management (a8ae267)
   epic-9-retrospective: optional

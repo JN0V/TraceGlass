@@ -15,9 +15,6 @@ class FakeCameraManager : CameraManager {
     private val _cameraError = MutableStateFlow<String?>(null)
     override val cameraError: StateFlow<String?> = _cameraError.asStateFlow()
 
-    val mutableFocalLengthPixels = MutableStateFlow<Float?>(null)
-    override val focalLengthPixels: StateFlow<Float?> = mutableFocalLengthPixels.asStateFlow()
-
     override fun bindPreview(
         lifecycleOwner: LifecycleOwner,
         surfaceProvider: Preview.SurfaceProvider,
@@ -28,7 +25,6 @@ class FakeCameraManager : CameraManager {
 
     override fun unbind() {
         _isCameraReady.value = false
-        mutableFocalLengthPixels.value = null
     }
 
     override fun reapplyZoom() {}
