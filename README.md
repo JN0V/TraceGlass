@@ -11,11 +11,18 @@ A free, open-source Android app that overlays a semi-transparent reference image
 ## Features
 
 - **Live camera overlay** — Import any image and display it semi-transparently over the camera feed
-- **Opacity control** — Adjustable slider with real-time preview
+- **ArUco marker tracking** — 4 markers at paper corners for automatic overlay positioning
+- **Perspective correction** — Homography-based transform corrects for phone tilt angles
+- **Progressive degradation** — Graceful fallback from 4→3→2→1→0 visible markers
+- **Opacity control** — Adjustable vertical slider with real-time preview
 - **Visual modes** — Color tint filters (Red, Green, Blue, Grayscale) and inverted transparency
 - **Drag & pinch** — Reposition and resize the overlay with gestures
+- **Overlay lock + viewport zoom** — Lock overlay position, then zoom/pan the viewport
+- **Timelapse capture** — Periodic snapshot → H.264 MP4 compilation → Gallery export/share
+- **Session persistence** — Auto-save/restore via DataStore (survives app restart)
 - **Flashlight toggle** — Built-in torch control for low-light tracing
-- **Session mode** — Keep screen on while tracing, hide UI controls for minimal interference
+- **Break reminders** — Configurable timer with notification tone
+- **Onboarding** — 3-page carousel + interactive camera walkthrough + setup guides
 
 ## Build
 
@@ -39,20 +46,23 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ## Architecture
 
-MVVM with Jetpack Compose, CameraX, and Koin DI. The project is organized into 8 focused modules:
+MVVM with Jetpack Compose, CameraX, and Koin DI. The project is organized into 9 focused modules:
 
 | Module | Responsibility |
 |--------|---------------|
-| `:app` | Application entry point, DI wiring |
-| `:core:camera` | CameraX preview and flashlight control |
-| `:core:cv` | OpenCV JNI wrapper (Epic 3) |
-| `:core:overlay` | Overlay positioning and transforms |
-| `:core:session` | Session persistence with DataStore |
-| `:feature:tracing` | Main tracing screen, ViewModel, UI |
-| `:feature:onboarding` | First-launch onboarding flow |
-| `:feature:timelapse` | Time-lapse capture and export |
+| `:app` | Application entry point, navigation, DI wiring |
+| `:core:camera` | CameraX preview, zoom, flashlight control |
+| `:core:cv` | OpenCV JNI wrapper (ArUco marker detection) |
+| `:core:overlay` | Homography solver, tracking, perspective correction |
+| `:core:session` | Session & settings persistence with DataStore |
+| `:core:timelapse` | Timelapse interfaces (storage, compiler, exporter) |
+| `:feature:tracing` | Main tracing screen, ViewModel, UI components |
+| `:feature:onboarding` | First-launch onboarding flow & setup guides |
+| `:feature:timelapse` | Timelapse implementations (MediaCodec, MediaStore) |
 
-For detailed planning documents, see:
+For detailed reference documentation, see [docs/index.md](docs/index.md).
+
+For planning documents, see:
 - [Product Requirements](_bmad-output/planning-artifacts/prd.md)
 - [Architecture Decisions](_bmad-output/planning-artifacts/architecture.md)
 - [UX Design Specification](_bmad-output/planning-artifacts/ux-design-specification.md)
@@ -74,11 +84,12 @@ For detailed planning documents, see:
 - [x] **Epic 1** — Project foundation, CI, camera feed, flashlight
 - [x] **Epic 2** — Image overlay, opacity, visual modes, gestures, sessions
 - [x] **Epic 3** — Fiducial marker tracking (OpenCV)
-- [ ] **Epic 4** — Time-lapse capture & sharing
+- [x] **Epic 4** — Time-lapse capture & sharing
 - [x] **Epic 5** — Session persistence
-- [ ] **Epic 6** — Onboarding & setup guides
+- [x] **Epic 6** — Onboarding & setup guides
 - [x] **Epic 7** — Settings & comfort features
-- [ ] **Epic 8** — Advanced tracking & perspective correction
+- [x] **Epic 8** — Advanced tracking & perspective correction
+- [x] **Epic 9** — Robustness & code health
 
 ## Branch Protection
 
