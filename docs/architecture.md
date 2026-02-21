@@ -334,7 +334,6 @@ IntentVideoSharer.shareVideo(uri)
 | arm64-v8a | Modern phones (Pixel, Samsung, OnePlus) |
 | armeabi-v7a | Older 32-bit ARM devices |
 | x86_64 | Emulators (Intel/AMD) |
-| x86 | Older emulators |
 
 ### 11.3 CI/CD
 
