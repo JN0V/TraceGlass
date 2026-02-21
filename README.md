@@ -60,13 +60,7 @@ MVVM with Jetpack Compose, CameraX, and Koin DI. The project is organized into 9
 | `:feature:onboarding` | First-launch onboarding flow & setup guides |
 | `:feature:timelapse` | Timelapse implementations (MediaCodec, MediaStore) |
 
-For detailed reference documentation, see [docs/index.md](docs/index.md).
-
-For planning documents, see:
-- [Product Requirements](_bmad-output/planning-artifacts/prd.md)
-- [Architecture Decisions](_bmad-output/planning-artifacts/architecture.md)
-- [UX Design Specification](_bmad-output/planning-artifacts/ux-design-specification.md)
-- [Epics & Stories](_bmad-output/planning-artifacts/epics.md)
+See the [Documentation](#documentation) section below for detailed references.
 
 ## Tech Stack
 
@@ -91,19 +85,24 @@ For planning documents, see:
 - [x] **Epic 8** — Advanced tracking & perspective correction
 - [x] **Epic 9** — Robustness & code health
 
-## Branch Protection
+## Documentation
 
-To ensure CI must pass before merging to `main`:
+**Reference docs** — [docs/index.md](docs/index.md)
 
-1. Go to **Settings → Branches** in your GitHub repository
-2. Click **Add branch protection rule**
-3. Set **Branch name pattern** to `main`
-4. Enable **Require status checks to pass before merging**
-5. Search and select the **build** status check (from the CI workflow)
-6. Optionally enable **Require branches to be up to date before merging**
-7. Click **Create** / **Save changes**
+| Document | Content |
+|----------|---------|
+| [Project Overview](docs/project-overview.md) | Features, tech stack, target devices |
+| [Architecture](docs/architecture.md) | Module design, data flows, algorithms, DI graph |
+| [Source Tree](docs/source-tree-analysis.md) | Annotated directory structure |
+| [Component Inventory](docs/component-inventory.md) | All interfaces, classes, ViewModels, composables |
+| [Development Guide](docs/development-guide.md) | Build, test, CI/CD, known gotchas |
 
-Once configured, pull requests targeting `main` cannot be merged unless the CI workflow passes.
+**Planning artifacts:**
+
+- [Product Requirements](_bmad-output/planning-artifacts/prd.md)
+- [Architecture Decisions](_bmad-output/planning-artifacts/architecture.md)
+- [UX Design Specification](_bmad-output/planning-artifacts/ux-design-specification.md)
+- [Epics & Stories](_bmad-output/planning-artifacts/epics.md)
 
 ## License
 

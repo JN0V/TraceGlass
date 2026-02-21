@@ -11,7 +11,8 @@ android {
         consumerProguardFiles("proguard-rules.pro")
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            // x86 excluded: OpenCV 4.10.0 libippicv.a linker error (ld.lld .note.gnu.property)
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
 
         externalNativeBuild {

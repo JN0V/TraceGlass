@@ -44,6 +44,7 @@ TraceGlass/
 │   │   │   └── cpp/
 │   │   │       ├── CMakeLists.txt         # OpenCV linking, security flags, F-Droid repro
 │   │   │       └── marker_detector_jni.cpp # ArUco DICT_4X4_50, cached JNI refs
+│   │   │                                  # ABIs: arm64-v8a, armeabi-v7a, x86_64
 │   │   ├── src/test/kotlin/.../
 │   │   │   ├── MarkerDetectorTest.kt      # Data class tests
 │   │   │   └── FakeMarkerDetector.kt      # Test double with call counter
