@@ -113,7 +113,7 @@ This document provides the complete epic and story breakdown for TraceGlass, dec
 - Audio feedback integration (optional, off by default)
 - Break reminder integration (optional, off by default)
 - Both portrait + landscape orientation support with no state loss
-- Adaptive icon design (glass lens + pencil trace concept)
+- Adaptive icon design (phone silhouette + pencil trace concept)
 - App icon: test at 48dp, 72dp, 96dp, 108dp
 - Reduced motion support (respect ANIMATOR_DURATION_SCALE)
 - Dark mode support via Dynamic Color M3
@@ -203,7 +203,7 @@ New users are guided from zero to their first successful trace through a hybrid 
 ### Epic 7: Settings & Comfort Features
 The user can customize their experience with break reminders, access app info, and re-open onboarding. The app icon completes the visual identity.
 **FRs covered:** FR35, FR39, FR40
-**Additional:** Settings screen, break reminder (configurable, off by default), about/licenses, adaptive icon (glass lens + pencil trace).
+**Additional:** Settings screen, break reminder (configurable, off by default), about/licenses, adaptive icon (phone silhouette + pencil trace).
 
 ## Epic 1: Project Foundation & Camera Feed
 
@@ -248,6 +248,7 @@ So that the app can be accepted into the F-Droid repository.
 **And** MockK is added as test dependency
 **And** Koin is configured with empty modules in `:app`
 **And** `./gradlew assembleRelease` succeeds
+**And** debug builds use `applicationIdSuffix = ".debug"` so debug and release can be installed side-by-side
 
 ### Story 1.3: GitHub Actions CI Pipeline
 
@@ -868,7 +869,7 @@ So that I can identify TraceGlass on my home screen and know its version and lic
 
 **Given** the app is installed
 **When** the user views their app drawer or home screen
-**Then** the TraceGlass adaptive icon is displayed (glass lens + pencil trace, teal palette)
+**Then** the TraceGlass adaptive icon is displayed (phone silhouette with pencil trace on screen, teal palette)
 **And** the icon is readable at 48dp, 72dp, 96dp, and 108dp sizes
 **And** the icon has separate foreground and background layers (Android adaptive icon format)
 

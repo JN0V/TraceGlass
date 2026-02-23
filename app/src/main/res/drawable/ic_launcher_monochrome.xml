@@ -4,42 +4,51 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Single-color silhouette of glass lens icon for Android 13+ themed icons -->
+    <!-- Single-color silhouette of phone icon for Android 13+ themed icons -->
 
-    <!-- Glass lens circle -->
-    <path
-        android:pathData="M48,44 m-16,0 a16,16 0 1,1 32,0 a16,16 0 1,1 -32,0"
-        android:strokeColor="#000000"
-        android:strokeWidth="3.5"
-        android:fillColor="#00000000" />
+    <!-- Phone body (rounded rectangle, slightly tilted) -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-8">
 
-    <!-- Lens handle -->
-    <path
-        android:pathData="M59.3,55.3 L70,66"
-        android:strokeColor="#000000"
-        android:strokeWidth="5"
-        android:strokeLineCap="round" />
+        <!-- Phone outer shell -->
+        <path
+            android:pathData="M38,24 L70,24 Q74,24 74,28 L74,80 Q74,84 70,84 L38,84 Q34,84 34,80 L34,28 Q34,24 38,24Z"
+            android:fillColor="#000000" />
 
-    <!-- Handle grip -->
-    <path
-        android:pathData="M67,63 L72,68"
-        android:strokeColor="#000000"
-        android:strokeWidth="6.5"
-        android:strokeLineCap="round" />
+        <!-- Phone screen (cutout) -->
+        <path
+            android:pathData="M38,30 L70,30 L70,76 L38,76Z"
+            android:fillColor="#00000000" />
 
-    <!-- Pencil trace -->
-    <path
-        android:pathData="M36,48 Q42,34 48,44 Q54,54 60,40"
-        android:strokeColor="#000000"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000" />
+        <!-- Camera notch -->
+        <path
+            android:pathData="M54,27 m-2,0 a2,2 0,1 1,4 0 a2,2 0,1 1,-4 0"
+            android:fillColor="#000000" />
 
-    <!-- Pencil tip -->
-    <path
-        android:pathData="M60,40 L63,35"
-        android:strokeColor="#000000"
-        android:strokeWidth="2"
-        android:strokeLineCap="round" />
+    </group>
+
+    <!-- Pencil trace on screen -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-8">
+
+        <path
+            android:pathData="M42,58 Q48,44 54,53 Q60,62 66,48"
+            android:strokeColor="#000000"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+
+        <!-- Pencil tip -->
+        <path
+            android:pathData="M66,48 L69,43"
+            android:strokeColor="#000000"
+            android:strokeWidth="2"
+            android:strokeLineCap="round" />
+
+    </group>
 
 </vector>

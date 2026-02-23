@@ -12,7 +12,7 @@ So that I can identify TraceGlass on my home screen and know its version and lic
 
 1. **Given** the app is installed
    **When** the user views their app drawer or home screen
-   **Then** the TraceGlass adaptive icon is displayed (glass lens + pencil trace, teal palette)
+   **Then** the TraceGlass adaptive icon is displayed (phone silhouette with pencil trace on screen, teal palette)
    **And** the icon is readable at 48dp, 72dp, 96dp, and 108dp sizes
    **And** the icon has separate foreground and background layers (Android adaptive icon format)
 
@@ -25,7 +25,7 @@ So that I can identify TraceGlass on my home screen and know its version and lic
 ## Tasks / Subtasks
 
 - [x] Task 1: Create adaptive app icon (AC: #1)
-  - [x] 1.1 Create `ic_launcher_foreground.xml` — glass lens circle + handle + wavy pencil trace + glare, teal (#00796B/#004D40)
+  - [x] 1.1 Create `ic_launcher_foreground.xml` — phone silhouette (tilted -8°) with pencil trace on screen, teal (#00796B/#004D40)
   - [x] 1.2 Create `ic_launcher_background.xml` — solid light teal (#B2DFDB)
   - [x] 1.3 Create `ic_launcher.xml` and `ic_launcher_round.xml` adaptive-icon in `mipmap-anydpi-v26/`
   - [x] 1.4 Add `android:icon` and `android:roundIcon` to AndroidManifest.xml
@@ -52,7 +52,7 @@ So that I can identify TraceGlass on my home screen and know its version and lic
 
 ### Icon Design
 
-- **Concept:** Glass lens (circle/magnifying glass) + pencil trace line
+- **Concept:** Phone silhouette (slightly tilted) with pencil trace on screen
 - **Colors:** Primary teal (#009688) foreground on lighter teal (#B2DFDB) background
 - **Style:** Flat material, no photorealism
 - **Format:** Vector drawables, 108dp viewport (adaptive icon standard)
@@ -106,12 +106,13 @@ Claude Opus 4.6
 - AboutScreen is purely static — no ViewModel, no repository, receives version info as parameters
 - Enabled `buildConfig = true` in app/build.gradle.kts (required since AGP 8+ for BuildConfig generation)
 - GitHub link opens in external browser via LocalUriHandler — no INTERNET permission needed
-- **Adversarial review (2026-02-19):** H1 icon was phone silhouette not glass lens (redesigned), H2 no monochrome layer (added), M3 hardcoded URL (moved to string resource), M4 no @Preview (added), M5 safe zone violation (fixed in redesign), L6 duplicate Back strings (consolidated to navigation_back), L8 no external link icon (added OpenInNew)
+- **Adversarial review (2026-02-19):** H1 icon was phone silhouette — adversarial review changed to glass lens, but product decision (2026-02-23) reverted to phone silhouette as intended design. H2 no monochrome layer (added), M3 hardcoded URL (moved to string resource), M4 no @Preview (added), M5 safe zone violation (fixed in redesign), L6 duplicate Back strings (consolidated to navigation_back), L8 no external link icon (added OpenInNew)
 
 ### Change Log
 
 - 2026-02-09: Story 7.3 implemented — adaptive app icon, about screen with version/licenses
 - 2026-02-19: Adversarial review fixes — icon redesign (glass lens, not phone), monochrome layer, i18n, a11y, preview
+- 2026-02-23: Product decision — revert icon to phone silhouette (original intent), glass lens was incorrect adversarial review override
 
 ### File List
 
