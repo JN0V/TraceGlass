@@ -142,6 +142,9 @@ android {
         cruncherEnabled = false
     }
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"  // Side-by-side install with release
+        }
         release {
             // Build from clean tagged commit — VCS info is fine
         }
