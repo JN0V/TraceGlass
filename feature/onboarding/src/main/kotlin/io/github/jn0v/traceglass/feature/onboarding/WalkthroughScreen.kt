@@ -3,7 +3,6 @@ package io.github.jn0v.traceglass.feature.onboarding
 import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
@@ -56,7 +55,7 @@ fun WalkthroughScreen(
     }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
+        contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
             val internalUri = copyImageToInternal(context, it)
@@ -88,9 +87,7 @@ fun WalkthroughScreen(
     // Auto-launch photo picker when step transitions to PICK_IMAGE
     LaunchedEffect(uiState.step) {
         if (uiState.step == WalkthroughStep.PICK_IMAGE) {
-            photoPickerLauncher.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-            )
+            photoPickerLauncher.launch("image/*")
         }
     }
 

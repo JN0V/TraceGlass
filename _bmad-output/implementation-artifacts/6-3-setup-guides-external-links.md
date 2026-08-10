@@ -24,6 +24,12 @@ so that I can prepare everything I need to start tracing.
    **Then** the system browser opens with the respective URL
    **And** no network permission is added to the app (links open in external browser)
 
+4. **Given** the device camera does not support ultra-wide (minZoomRatio >= 1.0)
+   **When** the setup guide is displayed
+   **Then** a notice explains that the field of view is limited and recommends placing the phone at 30cm+ height
+   **And** the notice suggests using a clip-on wide-angle lens for a wider view
+   **And** the notice is only shown on devices without ultra-wide capability (detected via Camera2 interop)
+
 ## Tasks / Subtasks
 
 - [x] Task 1: Create vector drawable marker shape illustrations (AC: #1)
@@ -46,6 +52,11 @@ so that I can prepare everything I need to start tracing.
   - [x] 3.2 Add navigation to guide from `MarkerPreparationPage` (onboarding slide 3) via "View detailed guide" button
   - [x] 3.3 Register `SetupGuideViewModel` in `OnboardingModule.kt` Koin DI
   - [x] 3.4 Run full test suite to verify no regressions
+- [ ] Task 4: Camera FOV guidance for devices without ultra-wide (AC: #4)
+  - [ ] 4.1 Expose `hasUltraWide: Boolean` from CameraManager (check minZoomRatio < 1.0 via Camera2 interop)
+  - [ ] 4.2 Add FOV limitation notice in SetupGuideScreen when `!hasUltraWide`
+  - [ ] 4.3 Notice content: recommend 30cm+ height, suggest clip-on wide-angle lens
+  - [ ] 4.4 Unit test: verify notice shown/hidden based on hasUltraWide flag
 
 ## Dev Notes
 
@@ -179,6 +190,7 @@ Claude Opus 4.6
 
 - 2026-02-09: Story 6.3 implemented — setup guides, external links, navigation integration
 - 2026-02-19: Fixed ExternalLinksSection — enabled buttons + wired LocalUriHandler.openUri() for marker sheet PDF and 3D stand STL downloads
+- 2026-02-23: Added AC #4 — camera FOV guidance for devices without ultra-wide (OnePlus 5T etc.)
 
 ### File List
 

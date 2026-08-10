@@ -10,7 +10,7 @@ subprojects {
         configure<com.android.build.gradle.LibraryExtension> {
             compileSdk = 36
             buildToolsVersion = "34.0.0"
-            defaultConfig.minSdk = 33
+            defaultConfig.minSdk = 31
             compileOptions {
                 sourceCompatibility = JavaVersion.VERSION_17
                 targetCompatibility = JavaVersion.VERSION_17
@@ -26,7 +26,7 @@ subprojects {
         configure<com.android.build.api.dsl.ApplicationExtension> {
             compileSdk = 36
             buildToolsVersion = "34.0.0"
-            defaultConfig.minSdk = 33
+            defaultConfig.minSdk = 31
             compileOptions {
                 sourceCompatibility = JavaVersion.VERSION_17
                 targetCompatibility = JavaVersion.VERSION_17

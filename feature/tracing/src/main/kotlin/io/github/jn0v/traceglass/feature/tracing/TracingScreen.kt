@@ -2,7 +2,6 @@ package io.github.jn0v.traceglass.feature.tracing
 
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -69,7 +68,7 @@ fun TracingScreen(
     }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
+        contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
             val internalUri = ImageFileHelper.copyImageToInternal(context, it)
@@ -155,9 +154,7 @@ fun TracingScreen(
                 onBreakReminderDismissed = viewModel::onBreakReminderDismissed,
                 onNavigateToSettings = onNavigateToSettings,
                 onPickImage = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
+                    photoPickerLauncher.launch("image/*")
                 },
                 isOverlayLocked = uiState.isOverlayLocked,
                 viewportZoom = uiState.viewportZoom,
