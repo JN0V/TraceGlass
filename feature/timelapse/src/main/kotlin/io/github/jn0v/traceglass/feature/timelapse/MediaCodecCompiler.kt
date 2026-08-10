@@ -53,7 +53,7 @@ class MediaCodecCompiler : TimelapseCompiler {
 
             try {
                 var skippedFrames = 0
-                var encodedIndex = 0
+                var nextPts = 0L
                 for ((i, file) in snapshotFiles.withIndex()) {
                     val bitmap = BitmapFactory.decodeFile(file.absolutePath)
                     if (bitmap == null) {
@@ -71,12 +71,11 @@ class MediaCodecCompiler : TimelapseCompiler {
                     inputSurface.unlockCanvasAndPost(canvas)
                     bitmap.recycle()
 
-                    drainEncoder(codec, bufferInfo, muxer, trackIndex, muxerStarted,
-                        presentationTimeUs = encodedIndex.toLong() * frameDurationUs) { track, started ->
+                    nextPts = drainEncoder(codec, bufferInfo, muxer, trackIndex, muxerStarted,
+                        frameDurationUs = frameDurationUs, nextPts = nextPts) { track, started ->
                         trackIndex = track
                         muxerStarted = started
                     }
-                    encodedIndex++
 
                     onProgress((i + 1).toFloat() / snapshotFiles.size)
                 }
@@ -87,7 +86,7 @@ class MediaCodecCompiler : TimelapseCompiler {
 
                 codec.signalEndOfInputStream()
                 drainEncoder(codec, bufferInfo, muxer, trackIndex, muxerStarted, drainAll = true,
-                    presentationTimeUs = encodedIndex.toLong() * frameDurationUs) { track, started ->
+                    frameDurationUs = frameDurationUs, nextPts = nextPts) { track, started ->
                     trackIndex = track
                     muxerStarted = started
                 }
@@ -112,11 +111,13 @@ class MediaCodecCompiler : TimelapseCompiler {
         trackIndex: Int,
         muxerStarted: Boolean,
         drainAll: Boolean = false,
-        presentationTimeUs: Long = 0L,
+        frameDurationUs: Long,
+        nextPts: Long,
         onTrackReady: (Int, Boolean) -> Unit
-    ) {
+    ): Long {
         var currentTrack = trackIndex
         var started = muxerStarted
+        var pts = nextPts
 
         while (true) {
             val outputIndex = codec.dequeueOutputBuffer(bufferInfo, if (drainAll) 10_000L else 0L)
@@ -133,14 +134,15 @@ class MediaCodecCompiler : TimelapseCompiler {
                         bufferInfo.size = 0
                     }
                     if (bufferInfo.size > 0 && started) {
-                        bufferInfo.presentationTimeUs = presentationTimeUs
+                        bufferInfo.presentationTimeUs = pts
                         muxer.writeSampleData(currentTrack, outputBuffer, bufferInfo)
+                        pts += frameDurationUs
                     }
                     codec.releaseOutputBuffer(outputIndex, false)
-                    if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return
+                    if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return pts
                 }
                 else -> {
-                    if (!drainAll) return
+                    if (!drainAll) return pts
                 }
             }
         }
