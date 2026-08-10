@@ -793,6 +793,12 @@ So that I can prepare everything I need to start tracing.
 **Then** the system browser opens with the respective URL
 **And** no network permission is added to the app (links open in external browser)
 
+**Given** the device camera does not support ultra-wide (minZoomRatio >= 1.0)
+**When** the setup guide is displayed
+**Then** a notice explains that the field of view is limited and recommends placing the phone at 30cm+ height
+**And** the notice suggests using a clip-on wide-angle lens for a wider view
+**And** the notice is only shown on devices without ultra-wide capability (detected via Camera2 interop)
+
 ### Story 6.4: Onboarding Flow Control
 
 As a returning user,
