@@ -1,0 +1,60 @@
+# workline's tester woken by an objection, on GitHub Actions — copy to
+# .github/workflows/workline-objection.yml, with workline-answer.yml beside it.
+# A comment opened by `workline:objection` on the tester's Draft, from a
+# person of the project or an App: noticed, with no token and no secret;
+# its end wakes workline-answer.yml. Why: docs/objection-jobs.md.
+# A person's reply in a thread on the developer's pull request: noticed
+# too, its end wakes workline-develop.yml's round.
+name: workline objection
+on:
+  pull_request_review_comment: {types: [created]}
+permissions: {}
+
+jobs:
+  noticed:
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'workline/tester/') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.comment.body, 'workline:objection') &&
+      (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) || github.event.comment.user.type == 'Bot')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: {}
+    steps:
+      - env: {PR: "${{ github.event.pull_request.number }}", URL: "${{ github.event.comment.html_url }}"}
+        run: 'echo "an objection on pull request $PR, $URL: workline-answer.yml answers it"'
+
+  # A person's reply in a thread on a line of the developer's pull
+  # request: noticed the same way, its end wakes the round in
+  # workline-develop.yml, which runs as the default branch holds it.
+  replied:
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'workline/developer/') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.state == 'open' && github.event.comment.user.type != 'Bot' &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: {}
+    steps:
+      - env: {PR: "${{ github.event.pull_request.number }}", URL: "${{ github.event.comment.html_url }}"}
+        run: 'echo "a reply in a thread on pull request $PR, $URL: workline-develop.yml runs its round"'
+
+  # A reply in a thread on the tester's Draft (workline/tester/*), the
+  # developer's App or a person's, its body opening with no
+  # `workline:objection`, nor the tester's own answer: noticed the same
+  # way, its end wakes workline-answer.yml, which answers the reply.
+  replied-to-tester:
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'workline/tester/') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.state == 'open' && github.event.comment.in_reply_to_id != '' &&
+      !startsWith(github.event.comment.body, 'workline:objection') &&
+      !contains(github.event.comment.body, '<!-- workline:tester-') &&
+      (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) || github.event.comment.user.type == 'Bot')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: {}
+    steps:
+      - env: {PR: "${{ github.event.pull_request.number }}", URL: "${{ github.event.comment.html_url }}"}
+        run: 'echo "a reply in a thread on pull request $PR, $URL: workline-answer.yml answers it"'

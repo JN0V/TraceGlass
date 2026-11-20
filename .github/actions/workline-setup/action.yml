@@ -1,0 +1,23 @@
+# What CI's build job installs for the unit tests, for workline's tester and
+# developer (workline-develop.yml runs it before the agent and the proof;
+# workline.yml's judge and workline-answer.yml too). No OpenCV, no CMake:
+# the JVM unit tests need neither; AGP wants the NDK at configuration.
+name: workline setup
+description: JDK 17, the Android SDK and Gradle's caches, to run the unit tests.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - uses: android-actions/setup-android@v3
+      with:
+        packages: 'platforms;android-36 build-tools;34.0.0 ndk;27.2.12479018'
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml', '**/gradle-wrapper.properties') }}
+        restore-keys: gradle-${{ runner.os }}-
