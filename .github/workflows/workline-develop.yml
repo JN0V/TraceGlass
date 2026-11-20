@@ -1,0 +1,789 @@
+# workline's line of states on GitHub Actions: copy to
+# .github/workflows/workline-develop.yml, route `issue: [tester, developer]`
+# in .workline/config.yaml. A person's label on an
+# issue runs the role its state wakes: the tester on workline:needs-tests,
+# the developer on workline:ready; a person's comment or edit on an issue
+# on the line, when its step is due; the job that moves a state starts the
+# next step; about hourly, the reconciler starts what an event missed. By hand
+# with no issue, the first ready one nobody took.
+# On its own pull request (workline/developer/…), the reviewer's verdict
+# or the gates' report (their comments, written by the App), a person's
+# comment or a project workflow failed on its branch (its tests red) runs
+# a review round: its fix pushed on its branch
+# (docs/review-loop.md); the reconciler starts one an event missed.
+#   judge, review          the agent and a read token; your setup steps run there first:
+#                          .github/actions/workline-setup/action.yml, when you have it.
+#   apply, review-apply    the App's key (environment workline-app), no AI key.
+#   heartbeat              no token; the environment workline-heartbeat, its wait
+#                          timer the gap between two reconciles: 55 min,
+#                          or the variable WORKLINE_RECONCILE_GAP_MINUTES.
+# Why each part: roles/developer/docs/triggers.md.
+name: workline develop
+# A run of an issue's step named for it, `workline develop #<n>`: a start
+# of that issue's run is skipped while one is queued or running.
+run-name: >-
+  ${{ (github.event_name == 'workflow_dispatch' && inputs.issue != '' && format('workline develop #{0}', inputs.issue)) ||
+  (github.event_name == 'workflow_dispatch' && inputs['pull-request'] != '' && format('workline develop round !{0}', inputs['pull-request'])) ||
+  (github.event_name == 'issue_comment' && github.event.issue.pull_request && (contains(github.event.comment.body, 'workline:sticky=reviewer/') ||
+    contains(github.event.comment.body, 'workline:sticky=gates/') || github.event.comment.user.type != 'Bot') &&
+  format('workline develop round !{0}', github.event.issue.number)) ||
+  (github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0] &&
+  format('workline develop round !{0}', github.event.workflow_run.pull_requests[0].number)) ||
+  (github.event_name == 'workflow_dispatch' && inputs.reconcile == 'next' && 'workline develop heartbeat') ||
+  (github.event_name == 'workflow_dispatch' && inputs.reconcile == 'true' && 'workline develop reconcile') ||
+  (github.event_name == 'issues' && github.event.sender.type != 'Bot' && startsWith(github.event.label.name, 'workline:') &&
+  format('workline develop #{0}', github.event.issue.number)) ||
+  (((github.event_name == 'issues' && github.event.action == 'edited') || (github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
+    (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
+      github.event.comment.user.login == github.event.issue.user.login))) &&
+  github.event.sender.type != 'Bot' && github.event.issue.state == 'open' && contains(join(github.event.issue.labels.*.name, ' '), 'workline:') &&
+  format('workline develop #{0}', github.event.issue.number)) || github.workflow }}
+on:
+  # A person's label on an issue: its state wakes its role.
+  # The engine's own labels wake nothing here: the job that set them
+  # starts the next step, by workflow_dispatch. A person's edit of an
+  # issue on the line, or comment on it, may be the answer it waits on,
+  # a draft's or a block's: its run asks the line first, no
+  # agent, and ends there when nothing is due.
+  issues: {types: [labeled, edited]}
+  workflow_dispatch:
+    inputs:
+      issue: {description: "the issue whose state's step runs; empty: the first ready issue nobody took", required: false, default: ""}
+      pull-request: {description: "a review round on this pull request of the developer's, rather than an issue", required: false, default: ""}
+      reconcile: {description: "true: the reconciler now, rather than an issue; next: once the heartbeat's wait timer passed", required: false, default: ""}
+  # On the developer's pull request, the reviewer's comment or the
+  # gates', written or edited by the App (a comment the job's own token
+  # writes wakes nothing), or a person's; on an issue, a person's.
+  issue_comment: {types: [created, edited]}
+  # A project's workflow that failed on the developer's branch: its
+  # checks red are a round; all green on its Draft, a round that
+  # marks it ready. Every workflow, workline's own left
+  # out by the job whose; check_suite and check_run never fire for
+  # GitHub Actions' own checks.
+  workflow_run: {workflows: ["*"], types: [completed], branches: ["workline/developer/**"]}
+  # The reconciler, hourly: a step an event missed. A safety
+  # net, not the driver. Each reconcile starts the next one, an hour on,
+  # by the heartbeat (job heartbeat); GitHub runs this schedule late or
+  # not at all, so it and the events above only start it again when the
+  # heartbeat stopped: job reconcile-due.
+  schedule: [{cron: "41 * * * *"}]
+permissions: {}
+
+env:
+  WORKLINE_VERSION: v0.85.0          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
+
+jobs:
+  judge:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs['pull-request'] == '' && inputs.reconcile == '') ||
+      (github.event_name == 'issues' && startsWith(github.event.label.name, 'workline:') && github.event.sender.type != 'Bot' &&
+        github.event.issue.state == 'open' && !github.event.issue.pull_request) ||
+      (github.event_name == 'issues' && github.event.action == 'edited' && github.event.sender.type != 'Bot' &&
+        github.event.issue.state == 'open' && contains(join(github.event.issue.labels.*.name, ' '), 'workline:')) ||
+      (github.event_name == 'issue_comment' && !github.event.issue.pull_request && github.event.sender.type != 'Bot' &&
+        github.event.issue.state == 'open' && contains(join(github.event.issue.labels.*.name, ' '), 'workline:') &&
+        (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
+          github.event.comment.user.login == github.event.issue.user.login))
+    # A person's edit or comment on an issue on the line: the
+    # step Due below asks the line, no agent; nothing due, the run ends
+    # there. A comment counts from the project's people or the issue's
+    # author, whose answer the line asked for; anyone else's waits for
+    # the reconcile, as before.
+    # On the job, after its `if`: another label takes no group. One run an
+    # issue, whichever role its state wakes; issues apart run side by side.
+    concurrency:
+      group: workline-issue-${{ github.event.issue.number || inputs.issue || 'first' }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 120   # above the developer's caps (75 min) and the tester's, ai-max-seconds and 3 × suite-max-seconds (50 min)
+    permissions: {contents: read, pull-requests: read, issues: read}
+    env: {HAS_CLAUDE: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}"}
+    outputs:
+      proposed: ${{ steps.line.outputs.proposed }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}   # no token left in .git/config for the agent
+      # The engine at the version pinned above, from its release, checksum
+      # verified: seconds, not a build.
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+      # Asked first, no agent: an issue whose step is not due —
+      # acted on already, or its run started twice — ends here, before
+      # your setup steps and the agent. With no issue, or the ask failing,
+      # the line runs and says why itself.
+      - name: Due
+        id: due
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKLINE_APP_ID: ${{ vars.WORKLINE_APP_ID }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+        run: |
+          printf '%s' "$ISSUE" | grep -Eqx '[0-9]+' || { echo "due=true" >> "$GITHUB_OUTPUT"; exit 0; }
+          status=0
+          workline route issue --target "issue:$ISSUE" --ai none --forge github --open-merge-request --input reconcile=list --json > due.json || status=$?
+          if [ "$status" != 0 ] || jq -e --argjson n "$ISSUE" '(.due // []) | index($n)' due.json >/dev/null; then
+            echo "due=true" >> "$GITHUB_OUTPUT"
+          else
+            jq -r '.summary // empty' due.json | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      # Your project's setup steps, before the agent and the proof: a
+      # composite action, .github/actions/workline-setup/action.yml, read
+      # from the default branch, holding what your test job installs (a
+      # language, a tool). None: the runner as it is.
+      - name: The project's setup steps
+        if: steps.due.outputs.due == 'true' && hashFiles('.github/actions/workline-setup/action.yml') != ''
+        uses: ./.github/actions/workline-setup
+      - name: Claude, when the repository gives its token
+        if: steps.due.outputs.due == 'true' && env.HAS_CLAUDE == 'true'
+        # Its shell: Claude Code boxes each command with bubblewrap, its
+        # network through socat; either missing, no command runs.
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          command -v bwrap >/dev/null && command -v socat >/dev/null ||
+            { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends bubblewrap socat; }
+      # The tests a tree holds, by their ids: the tester's red
+      # proof runs the base, the default branch's tip; the ids it finds are
+      # kept in the default branch's cache, newest first, which every pull
+      # request reads: the guard on the developer's then reads the base's
+      # rather than run it again (roles/tester/docs/green-proof.md).
+      # None left by another job on a runner that keeps .git: a pull
+      # request's code could have written them.
+      - name: No test ids but those restored
+        if: steps.due.outputs.due == 'true'
+        run: rm -rf .git/workline/test-ids
+      - uses: actions/cache/restore@v4
+        if: steps.due.outputs.due == 'true'
+        with: {path: .git/workline/test-ids, key: "workline-test-ids-${{ github.run_id }}-${{ github.run_attempt }}", restore-keys: workline-test-ids-}
+      - name: The test ids read
+        id: ids
+        if: steps.due.outputs.due == 'true'
+        run: echo "sum=$(cat .git/workline/test-ids/*.json 2>/dev/null | sha256sum | cut -c1-64)" >> "$GITHUB_OUTPUT"
+      - name: The issue line (proposals only)
+        id: line
+        if: steps.due.outputs.due == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKLINE_APP_ID: ${{ vars.WORKLINE_APP_ID }}   # the App whose comments keep the records a role reads back
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+        run: |
+          ai=none; [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && ai=claude
+          target=
+          if [ -n "$ISSUE" ]; then
+            printf '%s' "$ISSUE" | grep -Eqx '[0-9]+' || { echo "::error title=workline::not an issue number: $ISSUE"; exit 64; }
+            target="--target issue:$ISSUE"
+          fi
+          status=0
+          workline route issue $target --ai "$ai" --no-apply --forge github --open-merge-request --summary workline-summary.md --json > line.json || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "proposed=$(jq '((.pending // []) | length > 0) or ((.states // []) | length > 0)' line.json)" >> "$GITHUB_OUTPUT"
+          [ ! -s workline-summary.md ] || cat workline-summary.md
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Kept only when the tester ran, the developer not: the guard's
+      # base is never read from a run of the code it guards. A run a
+      # person's label starts may not write the cache: the next
+      # pull request's guard then runs the base.
+      - name: The test ids found
+        id: found
+        if: "!cancelled() && steps.line.outcome != 'skipped' && github.event_name != 'issues'"
+        env: {READ: "${{ steps.ids.outputs.sum }}"}
+        run: |
+          ls .git/workline/test-ids/*.json >/dev/null 2>&1 || exit 0
+          jq -e 'any(.steps[]?; .name == "tester") and all(.steps[]?; .name | startswith("developer") | not)' line.json >/dev/null 2>&1 || exit 0
+          [ "$(cat .git/workline/test-ids/*.json | sha256sum | cut -c1-64)" = "$READ" ] || echo "new=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/save@v4
+        if: "!cancelled() && steps.found.outputs.new == 'true'"
+        with: {path: .git/workline/test-ids, key: "workline-test-ids-${{ github.run_id }}-${{ github.run_attempt }}"}
+
+      - uses: actions/upload-artifact@v4
+        if: steps.line.outputs.proposed == 'true' || failure() || (steps.line.outputs.status != '' && steps.line.outputs.status != '0')
+        with: {name: workline-runs, path: "line.json\n.workline-runs", include-hidden-files: true, retention-days: 1}
+
+      - name: Verdict
+        run: |
+          status=${{ steps.line.outputs.status || 0 }}   # 0: not due, the line not run
+          if [ "$status" = 3 ]; then
+            echo "::warning title=workline::the agent could not be reached; the issue waits for the next run"
+            exit 0
+          fi
+          if [ "${status:-0}" != 0 ]; then
+            # The reason in the log: the summary, as an error annotation.
+            msg=$(jq -r '.summary // empty' line.json 2>/dev/null | head -c 2000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=workline::${msg:-the run ended with status $status, see its result file}"
+          fi
+          exit "$status"
+      # What this job's agent calls spent, a line a run: role, target,
+      # calls, tokens, seconds; no prompt, no diff. Kept 14 days for the
+      # weekly sample's tokens; the run folders
+      # keep their day. Also in a cancelled run (a newer push's), named so, not always(); in each
+      # attempt of a re-run, its own artifact; not in a merge queue's, which asks no agent. The
+      # first release after v0.75.0; an engine before it keeps none, said.
+      - name: The runs' tally
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        run: 'workline sample --tally workline-tally.jsonl || echo "workline: no tally kept"'
+      - uses: actions/upload-artifact@v4
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        with: {name: "workline-tally-${{ github.job }}-${{ github.run_attempt }}", path: workline-tally.jsonl, if-no-files-found: ignore, retention-days: 14}
+
+  apply:
+    needs: judge
+    if: always() && needs.judge.outputs.proposed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: workline-app       # the App's key: the default branch only
+    # actions: the next step started, by workflow_dispatch.
+    # statuses: the line's verdicts, read by the reconcile.
+    permissions: {contents: write, pull-requests: write, issues: write, actions: write, statuses: read}
+    outputs:
+      next: ${{ steps.next.outputs.issue }}
+    steps:
+      - id: app
+        if: vars.WORKLINE_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.WORKLINE_APP_ID }}
+          private-key: ${{ secrets.WORKLINE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token || github.token }}
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@v4
+        with: {name: workline-runs}
+      - env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+          WORKLINE_APP: ${{ steps.app.outputs.app-slug }}   # workline's own account: the records it trusts
+        run: |
+          if [ -n "$APP" ]; then
+            git config user.name "$APP[bot]"
+            git config user.email "$(gh api "/users/$APP%5Bbot%5D" --jq .id)+$APP[bot]@users.noreply.github.com"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          fi
+          status=0
+          workline apply --line line.json --summary workline-summary.md || status=$?
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      # Explicit chaining: the state this run moved the issue to
+      # wakes its next step now. The line says, with no agent, whether
+      # that step is due; its run then starts by workflow_dispatch, which
+      # the job's own token may start.
+      - id: next
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+        run: |
+          printf '%s' "$ISSUE" | grep -Eqx '[0-9]+' || exit 0
+          # Asked again after a pause: GitHub lists a comment the apply
+          # just wrote some seconds later, a review among them.
+          for wait in 0 10 20; do
+            sleep "$wait"
+            workline route issue --target "issue:$ISSUE" --ai none --forge github --open-merge-request --input reconcile=list --json > next.json || true
+            jq -e --argjson n "$ISSUE" '((.due // []) | index($n)) or ((.reviews // []) | length > 0)' next.json >/dev/null && break
+          done
+          # Started even when another run of the issue waits: that one may
+          # ask the line before this apply moved the state, and end; a
+          # second run ends at its due step, before any setup.
+          if jq -e --argjson n "$ISSUE" '(.due // []) | index($n)' next.json >/dev/null; then
+            gh workflow run "$(basename "${GITHUB_WORKFLOW_REF%%@*}")" --ref "$GITHUB_REF_NAME" -f issue="$ISSUE"
+            echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
+            echo "#$ISSUE's next step started" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # Its step a review round: back to ready from a Scope
+          # ask, the round on its own pull request resumes, not a claim.
+          for n in $(jq -r '(.reviews // [])[].id' next.json); do
+            if gh workflow run "$(basename "${GITHUB_WORKFLOW_REF%%@*}")" --ref "$GITHUB_REF_NAME" -f pull-request="$n"; then
+              echo "#$ISSUE's review round on !$n started" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning title=workline::!$n's round not started: the reconciler starts it"
+            fi
+          done
+      # Room this run freed: an issue moved out of a state with a
+      # limit — the developer taking a ready one — wakes the issues whose
+      # step waited for that room now, not at the next reconcile. The line
+      # says which, with no agent, the one waiting longest first.
+      - id: room
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Read only: reconcile=list writes nothing, and this token is not the App's.
+          WORKLINE_APP: ${{ steps.app.outputs.app-slug }}   # the App whose statuses keep the verdicts read back
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+        run: |
+          workline route reconcile --ai none --forge github --open-merge-request --input reconcile=list --input room=true --json > room.json || true
+          jq -r '.summary // empty' room.json | tee -a "$GITHUB_STEP_SUMMARY"
+          wf=$(basename "${GITHUB_WORKFLOW_REF%%@*}")
+          # An issue with a run queued or running is not started again.
+          busy=$(for s in queued in_progress pending waiting; do
+            gh run list --workflow "$wf" --status "$s" --limit 100 --json displayTitle --jq '.[].displayTitle'
+          done) || busy=
+          for n in $(jq -r '(.due // [])[]' room.json); do
+            [ "$n" != "$ISSUE" ] || continue   # its own next step: started above
+            if printf '%s\n' "$busy" | grep -qxF "workline develop #$n"; then
+              echo "#$n: a run of it is queued or running" >> "$GITHUB_STEP_SUMMARY"; continue
+            fi
+            gh workflow run "$wf" --ref "$GITHUB_REF_NAME" -f issue="$n" ||
+              echo "::warning title=workline::#$n's run not started: the reconciler starts it"
+          done
+
+  # The heartbeat: the reconciler's next run, started by the last
+  # one, waits here for the wait timer of the environment
+  # workline-heartbeat (55 minutes by default), holding no runner, then runs the job
+  # reconcile. One a branch: a new one cancels the one waiting.
+  heartbeat:
+    if: github.event_name == 'workflow_dispatch' && inputs.reconcile == 'next'
+    environment: {name: workline-heartbeat, deployment: false}
+    concurrency:
+      group: workline-heartbeat-${{ github.ref_name }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: {}
+    steps:
+      - run: echo "the heartbeat's wait timer passed; the reconciler runs"
+
+  # Whether a reconcile is due, on the schedule or an issue labelled, the
+  # line's every hop: the heartbeat stopped. Not while a
+  # reconciler's run or a heartbeat is queued, waiting or running, nor
+  # within the gap after the last that succeeded: the repository variable
+  # WORKLINE_RECONCILE_GAP_MINUTES, 55 when unset. Read from this workflow's runs,
+  # one call: a run an event starts may not write the Actions cache.
+  # Due, it starts the reconciler's own run, which the next event
+  # sees. One at a time: the next asks once this one started that run.
+  reconcile-due:
+    if: >-
+      github.event_name == 'schedule' || (github.event_name == 'issues' && startsWith(github.event.label.name, 'workline:'))
+    concurrency:
+      group: workline-reconcile-due
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: {actions: write}
+    steps:
+      - name: Due, ${{ vars.WORKLINE_RECONCILE_GAP_MINUTES || '55' }} minutes after the last
+        env: {GH_TOKEN: "${{ github.token }}", GAP_MINUTES: "${{ vars.WORKLINE_RECONCILE_GAP_MINUTES }}"}
+        run: |
+          gap=${GAP_MINUTES:-55}
+          if [[ "$gap" =~ ^0*[1-9][0-9]{0,3}$ ]]; then gap=$((10#$gap)); else
+            echo "::warning title=workline::WORKLINE_RECONCILE_GAP_MINUTES=$gap is not 1 to 9999 minutes: 55 taken"; gap=55; fi
+          wf=$(basename "${GITHUB_WORKFLOW_REF%%@*}")
+          # Newest first, read on past a page of the issues' own runs until
+          # a reconciler's run that succeeded: one call, most often.
+          echo '[]' > runs.json
+          for page in 1 2 3 4 5; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs?event=workflow_dispatch&branch=$GITHUB_REF_NAME&per_page=100&page=$page" \
+              --jq '{n: (.workflow_runs | length), r: [.workflow_runs[] | select(.display_title == "workline develop heartbeat" or .display_title == "workline develop reconcile")]}' > page.json || {
+              echo "::warning title=workline::this workflow's runs not read: no reconcile started; the next event or the schedule asks again"; exit 0; }
+            jq -s '.[0] + .[1].r' runs.json page.json > all.json && mv all.json runs.json
+            jq -e '.n < 100 or any(.r[]; .conclusion == "success")' page.json > /dev/null && break
+          done
+          going=$(jq -r 'map(select(.status != "completed"))[0] // empty | "\(.display_title), \(.status) since \(.created_at)"' runs.json)
+          if [ -n "$going" ]; then
+            echo "a reconcile on its way ($going): not due" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          last=$(jq -r 'map(select(.conclusion == "success") | .updated_at) | max // empty' runs.json)
+          if [ -n "$last" ] && ago=$(( $(date -u +%s) - $(date -u -d "$last" +%s) )) && [ "$ago" -lt $((gap * 60)) ]; then
+            echo "the last reconcile ended at $last, $((ago / 60)) min ago: not due" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          if gh workflow run "$wf" -R "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f reconcile=true; then
+            echo "the last reconcile ended at ${last:-no time found}: the reconciler's run started" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=workline::the reconciler's run not started: the next event or the schedule asks again"
+          fi
+
+  # Who keeps the line's verdicts, for the reconciler to read them:
+  # the App's slug, read with its key in a job of its own,
+  # so the key never reaches the job that runs the engine. Where the
+  # environment refuses the key, a branch, the reconciler runs all the
+  # same and says the verdicts it could not read.
+  identity:
+    if: github.event_name == 'workflow_dispatch' && (inputs.reconcile == 'true' || inputs.reconcile == 'next') && vars.WORKLINE_APP_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: workline-app       # the App's key: the default branch only
+    permissions: {}
+    outputs:
+      app: ${{ steps.app.outputs.app-slug }}
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.WORKLINE_APP_ID }}
+          private-key: ${{ secrets.WORKLINE_APP_PRIVATE_KEY }}
+          permission-metadata: read
+
+  # The reconciler: each open issue whose step is due and no
+  # event started, at most reconcile-max a run, the one waiting longest
+  # first, each its own run. No agent, a read token, the right to
+  # start runs. Its own run, named
+  # `workline develop heartbeat` or `workline develop reconcile`: by the
+  # heartbeat, by hand (input reconcile=true) or by reconcile-due. Those
+  # runs keep when it last ran (why: the developer's triggers page).
+  # One at a time.
+  reconcile:
+    needs: [heartbeat, identity]
+    if: >-
+      !cancelled() && (needs.heartbeat.result == 'success' || needs.heartbeat.result == 'skipped') &&
+      github.event_name == 'workflow_dispatch' && (inputs.reconcile == 'true' || inputs.reconcile == 'next')
+    concurrency:
+      group: workline-reconcile
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # statuses: the line's verdicts on the heads, read.
+    permissions: {contents: read, issues: read, pull-requests: read, checks: read, statuses: read, actions: write}
+    steps:
+      - uses: actions/checkout@v4
+        # The branch's head as the job starts, not the commit the run was
+        # started on: a heartbeat's waited its timer, and a fix merged
+        # meanwhile acts now.
+        with: {ref: "${{ github.ref }}", fetch-depth: 0, persist-credentials: false}
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          WORKLINE_APP_ID: ${{ vars.WORKLINE_APP_ID }}   # the App whose comments keep the records read back
+          WORKLINE_APP: ${{ needs.identity.outputs.app }}   # the App whose statuses keep the verdicts read back
+        run: |
+          wf=$(basename "${GITHUB_WORKFLOW_REF%%@*}")
+          # When the last reconcile ended, said when late: the last of the
+          # reconciler's runs that succeeded, this one still running; read
+          # on past a page of the issues' own runs, newest first.
+          LAST=
+          for page in 1 2 3 4 5; do
+            got=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs?event=workflow_dispatch&branch=$GITHUB_REF_NAME&per_page=100&page=$page" \
+              --jq '(.workflow_runs | length), ([.workflow_runs[] | select(.display_title == "workline develop heartbeat" or .display_title == "workline develop reconcile") |
+                select(.conclusion == "success") | .updated_at] | max // empty)') || break
+            LAST=$(printf '%s\n' "$got" | sed -n 2p)
+            [ -z "$LAST" ] && [ "$(printf '%s\n' "$got" | sed -n 1p)" = 100 ] || break
+          done
+          workline route reconcile --ai none --forge github --open-merge-request --input reconcile=list ${LAST:+--input "last=$LAST"} \
+            --summary workline-summary.md --json > due.json
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+          # An issue with a run queued or running, this one among them, is
+          # not started again.
+          busy=$(for s in queued in_progress pending waiting; do
+            gh run list --workflow "$wf" --status "$s" --limit 100 --json displayTitle --jq '.[].displayTitle'
+          done) || busy=
+          for n in $(jq -r '(.due // [])[]' due.json); do
+            if printf '%s\n' "$busy" | grep -qxF "workline develop #$n"; then
+              echo "#$n: a run of it is queued or running" >> "$GITHUB_STEP_SUMMARY"; continue
+            fi
+            gh workflow run "$wf" --ref "$GITHUB_REF_NAME" -f issue="$n" ||
+              echo "::warning title=workline::#$n's run not started: the next hour starts it"
+          done
+          # A review round an event missed, on the developer's pull request.
+          for n in $(jq -r '(.reviews // [])[].id' due.json); do
+            if printf '%s\n' "$busy" | grep -qxF "workline develop round !$n"; then
+              echo "!$n: a round of it is queued or running" >> "$GITHUB_STEP_SUMMARY"; continue
+            fi
+            gh workflow run "$wf" --ref "$GITHUB_REF_NAME" -f pull-request="$n" ||
+              echo "::warning title=workline::!$n's round not started: the next hour starts it"
+          done
+          # The tester's answer on each Draft an objection waits on, that
+          # no comment wakes again: a run that answered one, or stopped
+          # first.
+          for b in $(jq -r '(.answers // [])[].branch' due.json); do
+            gh workflow run workline-answer.yml --ref "$GITHUB_REF_NAME" -f branch="$b" ||
+              echo "::warning title=workline::the answer on $b not started: the next reconcile starts it"
+          done
+      # The next reconcile, by the heartbeat, even when this one
+      # failed: its run waits the environment's wait timer, in minutes.
+      # No such environment, or no wait timer (a private repository on
+      # GitHub's free plan has none), no heartbeat: said, the schedule and
+      # the events run the reconciler as they can. An idle line (no issue
+      # due, no review round due, none waiting on a time) starts none: the
+      # schedule or a `workline:` label starts it again (job reconcile-due).
+      - name: The next reconcile, by the heartbeat
+        if: always()
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          wait=$(gh api "repos/$GITHUB_REPOSITORY/environments/workline-heartbeat" \
+            --jq '[.protection_rules[]? | select(.type == "wait_timer") | .wait_timer][0] // 0' 2>gh-err.txt) || {
+            # no such environment (404) is no heartbeat; any other refusal is said and stops
+            if grep -q 'HTTP 404' gh-err.txt; then wait=0
+            else echo "::error title=workline::gh api environments/workline-heartbeat failed: $(tr '\n' ' ' < gh-err.txt)"; exit 1; fi
+          }
+          case "$wait" in ''|*[!0-9]*) wait=0 ;; esac
+          if [ "$wait" -lt 5 ]; then
+            echo "no heartbeat: no environment workline-heartbeat with a wait timer of 5 minutes or more; the schedule and the line's events start the next reconcile, when GitHub runs them" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # The reconcile's own list; none read (it failed), the line is not
+          # called idle.
+          if [ -s due.json ] && jq -e '((.due // []) + (.reviews // []) + (.waiting // []) + (.answers // [])) | length == 0' due.json >/dev/null 2>&1; then
+            echo "no heartbeat: the line is idle, nothing due and nothing waiting on a time; the schedule or a workline: label starts the next reconcile" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if gh workflow run "$(basename "${GITHUB_WORKFLOW_REF%%@*}")" --ref "$GITHUB_REF_NAME" -f reconcile=next; then
+            echo "the next reconcile in $wait min, by the heartbeat" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=workline::the heartbeat not started: the schedule or the line's next event starts the reconciler"
+          fi
+
+  # A review round: a fresh run on the developer's own
+  # pull request, reading its record, the reviewer's findings and a
+  # person's comments; its fix proposed only.
+  # Whose pull request: a comment on any pull request wakes this
+  # workflow, and its event names no branch. One call to the forge says
+  # whether it is the developer's, before the round sets anything up.
+  whose:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs['pull-request'] != '') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.state == 'open' &&
+        (contains(github.event.comment.body, 'workline:sticky=reviewer/') || contains(github.event.comment.body, 'workline:sticky=gates/') ||
+          (github.event.action == 'created' && github.event.comment.user.type != 'Bot' &&
+            contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)))) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'workline objection' &&
+        github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.pull_requests[0] != null) ||
+      (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.name, 'workline') &&
+        github.event.workflow_run.pull_requests[0] != null)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # actions: a project's runs on the head, read when one ends.
+    permissions: {pull-requests: read, actions: read}
+    outputs:
+      branch: ${{ steps.pr.outputs.branch }}
+    steps:
+      - id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number || inputs['pull-request'] || github.event.workflow_run.pull_requests[0].number }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          printf '%s' "$PR" | grep -Eqx '[0-9]+' || { echo "::error title=workline::not a pull request number: $PR"; exit 64; }
+          # A person's reply in a thread on a line: noticed by
+          # workline-objection.yml's job replied, which holds no token;
+          # its end is a round, the project's runs not read.
+          if [ "$RUN" = "workline objection" ]; then
+            replied=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/jobs" --jq '[.jobs[] | select(.name == "replied" and .conclusion == "success")] | length') ||
+              { echo "::warning title=workline::workline objection's run $RUN_ID not read: the reconciler asks within the hour"; exit 0; }
+            [ "$replied" -gt 0 ] || { echo "workline objection's run on pull request $PR: no person's reply in a thread noticed: no round"; exit 0; }
+            SHA=
+          fi
+          # A project's run ended: a round once all of its runs on
+          # that head are done, one of them failed, whichever ends last —
+          # a red one first, then a green one, wakes it all the same. All
+          # green on a Draft: a round too, which marks it ready.
+          runs=
+          if [ -n "$SHA" ]; then
+            runs=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$SHA&per_page=100" --jq '[.workflow_runs[] | select(.name | ascii_downcase | startswith("workline") | not)] |
+              if (all(.status == "completed") | not) then "running" elif any(.conclusion == "failure") then "red" else "green" end') || runs=unread
+            case "$runs" in
+              red|green) ;;
+              running) echo "the project's runs on $SHA: one still runs: no round"; exit 0 ;;
+              *) echo "::warning title=workline::the project's runs on $SHA not read: the reconciler asks within the hour"; exit 0 ;;
+            esac
+          fi
+          pr=$(gh pr view "$PR" --json headRefName,isCrossRepository,state,isDraft --jq 'select((.isCrossRepository | not) and .state == "OPEN") | "\(.headRefName) \(.isDraft)"')
+          if [ "$runs" = green ] && [ "${pr##* }" != true ]; then
+            echo "the project's runs on $SHA: none failed, and pull request $PR is no Draft: no round"; exit 0
+          fi
+          branch=${pr% *}
+          case "$branch" in
+            workline/developer/*) echo "branch=$branch" >> "$GITHUB_OUTPUT" ;;
+            *) echo "pull request $PR is not the developer's: no round" ;;
+          esac
+
+  review:
+    needs: whose
+    if: needs.whose.outputs.branch != ''
+    concurrency:
+      group: workline-develop-review-${{ github.event.issue.number || inputs['pull-request'] || github.event.workflow_run.pull_requests[0].number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 120   # a review round has the developer's caps, ai-max-seconds and proof-seconds: 75 min
+    # checks, actions: the project's checks red at its head, and their
+    # failed steps' log, the round's input.
+    permissions: {contents: read, pull-requests: read, issues: read, checks: read, actions: read}
+    env: {HAS_CLAUDE: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}"}
+    outputs:
+      run: ${{ steps.round.outputs.run }}
+      head: ${{ steps.round.outputs.head }}
+      issue: ${{ steps.round.outputs.issue }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}   # no token left in .git/config for the agent
+      # Your setup steps, from the default branch, before the round
+      # checks its pull request's code out.
+      - name: The project's setup steps
+        if: hashFiles('.github/actions/workline-setup/action.yml') != ''
+        uses: ./.github/actions/workline-setup
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+      - name: Claude, when the repository gives its token
+        if: env.HAS_CLAUDE == 'true'
+        # Its shell: Claude Code boxes each command with bubblewrap, its
+        # network through socat; either missing, no command runs.
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          command -v bwrap >/dev/null && command -v socat >/dev/null ||
+            { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends bubblewrap socat; }
+      - name: The round (proposed only)
+        id: round
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WORKLINE_APP_ID: ${{ vars.WORKLINE_APP_ID }}   # the App whose comments keep the records a role reads back
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          PR: ${{ github.event.issue.number || inputs['pull-request'] || github.event.workflow_run.pull_requests[0].number }}
+          BRANCH: ${{ needs.whose.outputs.branch }}
+        run: |
+          ai=none; [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && ai=claude
+          printf '%s' "$PR" | grep -Eqx '[0-9]+' || { echo "::error title=workline::not a pull request number: $PR"; exit 64; }
+          branch=$BRANCH
+          case "$branch" in workline/developer/*) ;; *) echo "pull request $PR is not the developer's: no round"; exit 0;; esac
+          # Merged or closed since it was read, its branch maybe deleted:
+          # nothing to review, said, the run green.
+          # A refused call is not an empty answer: said with its status, the step stops.
+          state=$(gh pr view "$PR" --json state --jq .state 2>gh-err.txt) ||
+            { echo "::error title=workline::gh pr view $PR failed: $(tr '\n' ' ' < gh-err.txt)"; exit 1; }
+          case "$state" in MERGED|CLOSED) echo "pull request $PR is $(printf '%s' "$state" | tr A-Z a-z) meanwhile: no round"; exit 0;; esac
+          git rev-parse -q --verify "origin/$branch^{commit}" >/dev/null ||
+            { echo "pull request $PR: its branch $branch is gone, merged or closed meanwhile: no round"; exit 0; }
+          # Its branch's head: the fix is laid and proven there.
+          git checkout -q -B "$branch" "origin/$branch"   # fetched by the checkout, which keeps no token
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "issue=${branch#workline/developer/}" >> "$GITHUB_OUTPUT"   # its issue, whose next step the apply starts
+          status=0
+          workline develop --merge-request "$PR" --ai "$ai" --no-apply --forge github --json > round.json || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "run=$(jq -r '(.pending // [])[0] // empty | split("/") | last' round.json)" >> "$GITHUB_OUTPUT"   # a run left to apply, by name
+          jq -r '.summary // empty' round.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: steps.round.outputs.run != '' || failure() || (steps.round.outputs.status != '' && steps.round.outputs.status != '0')
+        with: {name: workline-round, path: ".workline-runs", include-hidden-files: true, retention-days: 1}
+      - name: Verdict
+        env: {STATUS: "${{ steps.round.outputs.status }}"}
+        run: |
+          if [ "$STATUS" = 3 ]; then
+            echo "::warning title=workline::the agent could not be reached; the review waits for the next verdict"
+            exit 0
+          fi
+          if [ "${STATUS:-0}" != 0 ]; then
+            # The reason in the log: the summary, as an error annotation.
+            msg=$(jq -r '.summary // empty' round.json 2>/dev/null | head -c 2000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=workline::${msg:-the run ended with status $STATUS, see its result file}"
+          fi
+          exit "${STATUS:-0}"
+      # What this job's agent calls spent, a line a run: role, target,
+      # calls, tokens, seconds; no prompt, no diff. Kept 14 days for the
+      # weekly sample's tokens; the run folders
+      # keep their day. Also in a cancelled run (a newer push's), named so, not always(); in each
+      # attempt of a re-run, its own artifact; not in a merge queue's, which asks no agent. The
+      # first release after v0.75.0; an engine before it keeps none, said.
+      - name: The runs' tally
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        run: 'workline sample --tally workline-tally.jsonl || echo "workline: no tally kept"'
+      - uses: actions/upload-artifact@v4
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        with: {name: "workline-tally-${{ github.job }}-${{ github.run_attempt }}", path: workline-tally.jsonl, if-no-files-found: ignore, retention-days: 14}
+
+  review-apply:
+    needs: review
+    if: always() && needs.review.outputs.run != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: workline-app       # the App's key: the default branch only
+    # actions: its issue's next step started, by workflow_dispatch.
+    permissions: {contents: write, pull-requests: write, issues: write, actions: write}
+    steps:
+      - id: app
+        if: vars.WORKLINE_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.WORKLINE_APP_ID }}
+          private-key: ${{ secrets.WORKLINE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token || github.token }}
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+      # The round ran the pull request's code: its folder is data, outside the checkout.
+      - uses: actions/download-artifact@v4
+        with: {name: workline-round, path: "${{ runner.temp }}/workline-runs"}
+      # Only what its pull request's line may do, to it, at the head the
+      # round read: its fix pushed on its branch, never forced.
+      - env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+          WORKLINE_APP: ${{ steps.app.outputs.app-slug }}   # workline's own account: the records it trusts
+          WORKLINE_RUNS_DIR: ${{ runner.temp }}/workline-runs
+          RUN: ${{ needs.review.outputs.run }}
+          HEAD_SHA: ${{ needs.review.outputs.head }}
+          PR: ${{ github.event.issue.number || inputs['pull-request'] || github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          printf '%s' "$RUN" | grep -Eqx '[0-9]{8}T[0-9]{6}\.[0-9]{9}-[a-z0-9-]+' && [ -d "$WORKLINE_RUNS_DIR/$RUN" ] ||
+            { echo "::error title=workline::the round named no run of its own: $RUN"; exit 1; }
+          if [ -n "$APP" ]; then
+            git config user.name "$APP[bot]"
+            git config user.email "$(gh api "/users/$APP%5Bbot%5D" --jq .id)+$APP[bot]@users.noreply.github.com"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          fi
+          status=0
+          workline apply "$RUN" --from-merge-request "$PR" --head "$HEAD_SHA" --forge github --summary workline-summary.md || status=$?
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      # Explicit chaining: the state the round moved its issue to
+      # wakes its next step now. Blocked on a Scope ask, the product owner
+      # reads it at once, not at the next reconcile. The line says, with
+      # no agent, whether that step is due; asked again after a pause,
+      # GitHub listing the round's comment some seconds later.
+      - name: The issue's next step
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.review.outputs.issue }}
+        run: |
+          printf '%s' "$ISSUE" | grep -Eqx '[0-9]+' || exit 0
+          for wait in 0 10 20; do
+            sleep "$wait"
+            workline route issue --target "issue:$ISSUE" --ai none --forge github --open-merge-request --input reconcile=list --json > next.json || true
+            jq -e --argjson n "$ISSUE" '((.due // []) | index($n)) or ([.findings[]?.rule] | index("state-wakes-none"))' next.json >/dev/null && break
+          done
+          jq -e --argjson n "$ISSUE" '(.due // []) | index($n)' next.json >/dev/null || exit 0
+          # Not while a run of the issue is queued or running.
+          wf=$(basename "${GITHUB_WORKFLOW_REF%%@*}")
+          busy=$(for s in queued in_progress pending waiting; do
+            gh run list --workflow "$wf" --status "$s" --limit 100 --json displayTitle --jq '.[].displayTitle'
+          done) || busy=
+          if printf '%s\n' "$busy" | grep -qxF "workline develop #$ISSUE"; then
+            echo "#$ISSUE: a run of it is queued or running" >> "$GITHUB_STEP_SUMMARY"
+          else
+            if gh workflow run "$wf" --ref "$GITHUB_REF_NAME" -f issue="$ISSUE"; then
+              echo "#$ISSUE's next step started" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning title=workline::#$ISSUE's run not started: the reconciler starts it"
+            fi
+          fi

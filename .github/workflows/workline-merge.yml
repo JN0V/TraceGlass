@@ -1,0 +1,93 @@
+# workline's merge policy when a label is put or taken off, or a draft
+# made — copy to .github/workflows/workline-merge.yml, beside workline.yml
+# and workline-apply.yml,
+# with `merge: {autonomy: cautious}` (the first release after v0.25.0).
+# pull_request_target: the repository's own run and secrets, the base
+# checked out, nothing of the pull request. No `judge` here: a skipped one
+# would show the check passed. Only with the GitHub App's token, its key in
+# the environment workline-app, which only the default branch may use.
+# What it does: docs/merge-policy.md.
+# At `merge: {autonomy: enterprising}`, also when a release candidate's
+# issue gets the label workline:accepted (the person's yes ships it) or is
+# closed (refused): docs/release-candidate.md.
+# At `merge: {autonomy: normal}` or above, also when a person closes the
+# issue holding a demotion: the pull requests it held merge at once.
+# Hourly too, the safety net: a pull request whose auto-merge GitHub
+# missed, its checks green, merged by the next run.
+name: workline merge
+on:
+  pull_request_target: {types: [labeled, unlabeled, converted_to_draft]}
+  issues: {types: [labeled, closed]}
+  schedule: [{cron: "53 * * * *"}]
+  # By hand, and by the loop when `workline tick` lists the merge
+  # (docs/tick.md): a run as the hourly one, named `workline merge`.
+  workflow_dispatch:
+permissions: {}
+
+env:
+  WORKLINE_VERSION: v0.85.0          # a release of workline: update it to take a newer one (x-release-please-version)
+
+jobs:
+  follow:
+    # One at a time on a branch, with workline-apply.yml's: each run reads
+    # what the one before set.
+    concurrency: {group: "workline-follow-${{ github.base_ref || github.event.repository.default_branch || github.ref_name }}", cancel-in-progress: false}
+    # An issue's event: a release candidate's yes or close, or a demotion
+    # issue's close, known by its title as the engine reads it.
+    if: >-
+      github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'workline:candidate') &&
+      (github.event.action == 'closed' || github.event.label.name == 'workline:accepted') ||
+      github.event.action == 'closed' && startsWith(github.event.issue.title, 'workline: its ') &&
+      contains(github.event.issue.title, 'merge requests wait for a person''s yes again')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: workline-app       # the App's key: the default branch only
+    permissions: {contents: write, pull-requests: read}
+    steps:
+      - id: app
+        if: vars.WORKLINE_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.WORKLINE_APP_ID }}
+          private-key: ${{ secrets.WORKLINE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.base_ref || github.event.repository.default_branch || github.ref_name }}
+          token: ${{ steps.app.outputs.token || github.token }}
+      - name: Whether the project has a merge policy
+        id: policy
+        run: |
+          if grep -qE '^merge:' .workline/config.yaml 2>/dev/null; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no merge policy (merge:): nothing to do"
+          fi
+      # The engine at the version pinned above, checksum verified.
+      - name: workline
+        if: steps.policy.outputs.run == 'true'
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+      - if: steps.policy.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+          WORKLINE_APP: ${{ steps.app.outputs.app-slug }}   # who holds the yes, and reads the verdict
+          WORKLINE_APP_ID: ${{ vars.WORKLINE_APP_ID }}
+          BASE: ${{ github.base_ref || github.event.repository.default_branch || github.ref_name }}
+        run: |
+          if [ -n "$APP" ]; then
+            git config user.name "$APP[bot]"
+            git config user.email "$(gh api "/users/$APP%5Bbot%5D" --jq .id)+$APP[bot]@users.noreply.github.com"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          fi
+          status=0
+          workline follow --base "$BASE" --forge github --summary workline-summary.md || status=$?
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
