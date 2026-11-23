@@ -170,11 +170,12 @@ class TracingViewModel(
 
     fun onOverlayGesture(centroid: Offset, pan: Offset, zoom: Float, rotation: Float) {
         if (_uiState.value.isOverlayLocked) return
+        val imageCenter = Offset(viewWidth / 2f, viewHeight / 2f) + manualOffset
         manualOffset += pan
         if (zoom != 1f) {
-            // Adjust offset so scale originates from the gesture centroid, not the view center
-            val viewCenter = Offset(viewWidth / 2f, viewHeight / 2f)
-            manualOffset += (centroid - viewCenter) * (1f - zoom)
+            // Adjust offset so scale originates from the gesture centroid, relative to the
+            // image's current centre (view centre + offset), not the view centre
+            manualOffset += (centroid - imageCenter) * (1f - zoom)
             manualScaleFactor *= zoom
         }
         if (rotation != 0f) {
