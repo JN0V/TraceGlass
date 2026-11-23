@@ -5,21 +5,28 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.emptyPreferences
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 
 class DataStoreOnboardingRepository(
     private val dataStore: DataStore<Preferences>
 ) : OnboardingRepository {
 
+    private val safeData: Flow<Preferences> = dataStore.data.catch { exception ->
+        if (exception is IOException) emit(emptyPreferences()) else throw exception
+    }
+
     override val isOnboardingCompleted: Flow<Boolean> =
-        dataStore.data.map { prefs -> prefs[KEY_COMPLETED] ?: false }
+        safeData.map { prefs -> prefs[KEY_COMPLETED] ?: false }
 
     override val isTooltipShown: Flow<Boolean> =
-        dataStore.data.map { prefs -> prefs[KEY_TOOLTIP_SHOWN] ?: false }
+        safeData.map { prefs -> prefs[KEY_TOOLTIP_SHOWN] ?: false }
 
     override val selectedTier: Flow<SetupTier?> =
-        dataStore.data.map { prefs ->
+        safeData.map { prefs ->
             prefs[KEY_SELECTED_TIER]?.let { name ->
                 SetupTier.entries.firstOrNull { it.name == name }
             }
