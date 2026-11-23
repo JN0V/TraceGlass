@@ -2,6 +2,8 @@ package io.github.jn0v.traceglass.feature.tracing.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.jn0v.traceglass.core.session.MAX_BREAK_INTERVAL_MINUTES
+import io.github.jn0v.traceglass.core.session.MIN_BREAK_INTERVAL_MINUTES
 import io.github.jn0v.traceglass.core.session.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,7 +48,7 @@ class SettingsViewModel(
     }
 
     fun onBreakIntervalChanged(minutes: Int) {
-        val clamped = minutes.coerceIn(MIN_INTERVAL, MAX_INTERVAL)
+        val clamped = minutes.coerceIn(MIN_BREAK_INTERVAL_MINUTES, MAX_BREAK_INTERVAL_MINUTES)
         viewModelScope.launch {
             repository.setBreakReminderIntervalMinutes(clamped)
         }
@@ -58,8 +60,4 @@ class SettingsViewModel(
         }
     }
 
-    companion object {
-        const val MIN_INTERVAL = 5
-        const val MAX_INTERVAL = 60
-    }
 }

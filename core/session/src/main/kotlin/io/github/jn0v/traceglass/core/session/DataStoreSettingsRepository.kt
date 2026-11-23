@@ -29,7 +29,8 @@ class DataStoreSettingsRepository(
             SettingsData(
                 audioFeedbackEnabled = prefs[KEY_AUDIO_FEEDBACK] ?: false,
                 breakReminderEnabled = prefs[KEY_BREAK_REMINDER] ?: false,
-                breakReminderIntervalMinutes = prefs[KEY_BREAK_INTERVAL] ?: 30,
+                breakReminderIntervalMinutes = (prefs[KEY_BREAK_INTERVAL] ?: 30)
+                    .coerceIn(MIN_BREAK_INTERVAL_MINUTES, MAX_BREAK_INTERVAL_MINUTES),
                 perspectiveCorrectionEnabled = prefs[KEY_PERSPECTIVE_CORRECTION] ?: true
             )
         }
