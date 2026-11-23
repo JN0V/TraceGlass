@@ -172,13 +172,17 @@ class TracingViewModel(
         if (_uiState.value.isOverlayLocked) return
         val imageCenter = Offset(viewWidth / 2f, viewHeight / 2f) + manualOffset
         manualOffset += pan
-        if (zoom != 1f) {
-            // Adjust offset so scale originates from the gesture centroid, relative to the
-            // image's current centre (view centre + offset), not the view centre
-            manualOffset += (centroid - imageCenter) * (1f - zoom)
+        if (zoom != 1f || rotation != 0f) {
+            // Scale and rotate around the gesture centroid, relative to the image's current
+            // centre (view centre + offset), not the view centre: the image centre moves from
+            // centroid + v to centroid + zoom * R(rotation) * v, with v = imageCenter - centroid.
+            val v = imageCenter - centroid
+            val rad = Math.toRadians(rotation.toDouble())
+            val c = kotlin.math.cos(rad).toFloat()
+            val s = kotlin.math.sin(rad).toFloat()
+            val rotated = Offset(c * v.x - s * v.y, s * v.x + c * v.y)
+            manualOffset += rotated * zoom - v
             manualScaleFactor *= zoom
-        }
-        if (rotation != 0f) {
             manualRotation += rotation
         }
         updateOverlayFromCombined()

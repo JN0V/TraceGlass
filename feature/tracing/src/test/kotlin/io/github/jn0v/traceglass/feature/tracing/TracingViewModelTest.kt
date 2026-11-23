@@ -350,6 +350,21 @@ class TracingViewModelTest {
         }
 
         @Test
+        fun `rotate 90 degrees after a drag keeps the point under the fingers`() {
+            val viewModel = createViewModel()
+            viewModel.setViewDimensions(1080f, 1920f)
+            viewModel.onOverlayDrag(Offset(300f, 0f))
+            // Image centre (840, 960) is the centroid: it must not move.
+            viewModel.onOverlayGesture(Offset(840f, 960f), Offset.Zero, 1f, 90f)
+            assertEquals(300f, viewModel.uiState.value.overlayOffset.x, 0.1f)
+            assertEquals(0f, viewModel.uiState.value.overlayOffset.y, 0.1f)
+            // Centroid at the view centre: the image centre (840, 960) swings to (540, 1260).
+            viewModel.onOverlayGesture(Offset(540f, 960f), Offset.Zero, 1f, 90f)
+            assertEquals(0f, viewModel.uiState.value.overlayOffset.x, 0.1f)
+            assertEquals(300f, viewModel.uiState.value.overlayOffset.y, 0.1f)
+        }
+
+        @Test
         fun `onOverlayGesture with off-center centroid adjusts offset for scale pivot`() {
             val viewModel = createViewModel()
             // Centroid at (340, 460) — offset from view center (540, 960) by (-200, -500)
@@ -369,9 +384,10 @@ class TracingViewModelTest {
             viewModel.onOverlayGesture(center, Offset(10f, 5f), 2f, 15f)
             viewModel.onOverlayGesture(center, Offset(20f, 10f), 0.5f, -5f)
             // Call 1: offset (10, 5). Call 2: the image centre is (550, 965), so the 0.5x zoom
-            // at (540, 960) moves it by (-10, -5) * 0.5 = (-5, -2.5) on top of the (20, 10) pan.
-            assertEquals(25f, viewModel.uiState.value.overlayOffset.x, 0.1f)
-            assertEquals(12.5f, viewModel.uiState.value.overlayOffset.y, 0.1f)
+            // at (540, 960) with a -5 degree rotation moves it to 0.5 * R(-5deg) * (10, 5) - (10, 5)
+            // = (-4.80, -2.95) on top of the (20, 10) pan.
+            assertEquals(25.2f, viewModel.uiState.value.overlayOffset.x, 0.1f)
+            assertEquals(12.05f, viewModel.uiState.value.overlayOffset.y, 0.1f)
             // Scale: 2 * 0.5 = 1
             assertEquals(1f, viewModel.uiState.value.overlayScale, 0.001f)
             // Rotation: 15 + (-5) = 10
