@@ -1,0 +1,184 @@
+# The weekly sample of every role's acts, on GitHub Actions — copy to
+# .github/workflows/workline-sample.yml. Needs a workline release with
+# `workline sample`: the first after v0.2.1; the other roles' acts, the
+# first after v0.28.0.
+#
+# Every Monday, one in ten of the docs whose `checked` the documentalist
+# moved in the week before is read whole against its sources, at the commit
+# `checked` names, by a judge standing apart from the model that vouched;
+# the engine checks every quote it gives.
+# What it found goes to one tracking issue, a comment a week. A `checked`
+# found false labels it `documentalist-step-0`, and a pull request puts that
+# doc's `checked` back, for a person to review; nothing is merged here.
+#
+# The judge: the documentalist's `sample.judge` setting (.workline/config.yaml),
+# or the repository variable WORKLINE_JUDGE — an --ai value, `claude:opus`
+# when the gardening vouches with Sonnet, a `cmd:` running another
+# provider's agent when there is one. With none, the sample is still drawn,
+# and what it drew is listed on the issue for a person to read.
+#
+# The other roles' acts are drawn too, one in ten per kind: the
+# product owner's acts done alone, the findings the reviewer's judge kept
+# or dropped, the commits the committer rewrote — read from the issues and
+# pull requests, never written. The same judge re-checks each, one call an
+# act, never on a model that acted, within `sample.ai-max-tokens` (400,000
+# by default).
+#
+# The week sampled is the last whole one; for another, run the workflow by
+# hand (Actions > workline sample > Run workflow) with `week` (2026-W40).
+#
+# Two jobs, two trust zones, as for pull requests (workline.yml):
+#   read   draws the sample and has it read, with CLAUDE_CODE_OAUTH_TOKEN in
+#          the one step that needs it, beside a token that only reads the
+#          issues and pull requests. It writes nothing.
+#   write  holds the write token and no AI key: it comments on the tracking
+#          issue, labels it, and opens the pull request, with the GitHub App
+#          when there is one (variable WORKLINE_APP_ID, secret
+#          WORKLINE_APP_PRIVATE_KEY in the environment workline-app, which
+#          only the default branch may use; Issues, Contents, Pull requests).
+name: workline sample
+on:
+  # Mondays, 05:43 UTC, after the night's gardening. Off the hour: GitHub may
+  # drop a run scheduled at its start, when busiest.
+  schedule: [{cron: "43 5 * * 1"}]
+  workflow_dispatch:
+    inputs:
+      week: {description: "the ISO week sampled, 2026-W40 (default: the last whole week)", required: false}
+permissions: {}
+
+env:
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
+  # the job summary (--summary) needs the first release after v0.16.0
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # issues and pull-requests read: the acts the other roles recorded
+    # there; actions read: the tallies the line's jobs kept.
+    permissions: {contents: read, issues: read, pull-requests: read, actions: read}
+    env:
+      HAS_CLAUDE: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}"
+      WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
+    outputs:
+      drawn: ${{ steps.sample.outputs.drawn }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      # The engine at the version pinned above, from its release, checksum verified.
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+      - name: Claude, when the repository gives its token
+        if: env.HAS_CLAUDE == 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      # The week's tokens: the tallies the jobs
+      # calling an agent kept 14 days, gathered as
+      # the runs folder's tally. This repository's runs only: a fork's pull
+      # request runs with no agent token, and what it uploads is anyone's.
+      # The jobs' names are the templates'.
+      - name: The line's tallies, from its jobs' artifacts
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          dir=$RUNNER_TEMP/workline-tallies; mkdir -p "$dir" "$WORKLINE_RUNS_DIR"
+          for job in propose review warn curator read; do
+            # one artifact an attempt: workline-tally-<job>-<attempt>; the name filter is exact
+            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+              --jq '.artifacts[] | select((.expired | not) and (.name | test("^workline-tally-'"$job"'(-[0-9]+)?$")) and .workflow_run.head_repository_id == .workflow_run.repository_id) | .id' ||
+              echo "::warning title=workline::the tallies of the jobs named $job could not be listed: the week's tokens leave them out" >&2
+          done | sort -u > "$dir/ids"
+          n=0
+          while read -r id; do
+            if gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$dir/$id.zip" && unzip -p "$dir/$id.zip" workline-tally.jsonl >> "$WORKLINE_RUNS_DIR/tally.jsonl"; then
+              n=$((n + 1))
+            else
+              echo "::warning title=workline::the tally $id could not be read: the week's tokens leave it out"
+            fi
+          done < "$dir/ids"
+          echo "workline: $n tallies gathered"
+
+      - name: The sample, read (writes nothing)
+        id: sample
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          WORKLINE_JUDGE: ${{ vars.WORKLINE_JUDGE }}
+          GH_TOKEN: ${{ github.token }}
+          WEEK: ${{ inputs.week }}
+        run: |
+          status=0
+          workline sample ${WEEK:+--week "$WEEK"} --forge github --out sample.json --summary workline-summary.md || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          [ "$status" != 1 ] && [ -s sample.json ] && echo "drawn=true" >> "$GITHUB_OUTPUT"
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.sample.outputs.drawn == 'true'
+        with: {name: workline-sample, path: sample.json}
+
+      - name: Verdict
+        run: |
+          case "${{ steps.sample.outputs.status }}" in
+            0) ;;
+            2) echo "::warning title=workline::the sample holds acts for a person: see the tracking issue" ;;
+            3) echo "::warning title=workline::the judge or the forge could not be reached; what was drawn is listed for a person" ;;
+            *) exit 1 ;;
+          esac
+      # What this job's agent calls spent, a line a run: role, target,
+      # calls, tokens, seconds; no prompt, no diff. Kept 14 days for the
+      # weekly sample's tokens; the run folders
+      # keep their day. Also in a cancelled run (a newer push's), named so, not always(); in each
+      # attempt of a re-run, its own artifact; not in a merge queue's, which asks no agent. The
+      # first release after v0.75.0; an engine before it keeps none, said.
+      - name: The runs' tally
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        run: 'workline sample --tally workline-tally.jsonl || echo "workline: no tally kept"'
+      - uses: actions/upload-artifact@v4
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        with: {name: "workline-tally-${{ github.job }}-${{ github.run_attempt }}", path: workline-tally.jsonl, if-no-files-found: ignore, retention-days: 14}
+
+  write:
+    needs: read
+    if: always() && needs.read.outputs.drawn == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: workline-app       # the App's key: the default branch only
+    permissions: {contents: write, pull-requests: write, issues: write}
+    steps:
+      - id: app
+        if: vars.WORKLINE_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.WORKLINE_APP_ID }}
+          private-key: ${{ secrets.WORKLINE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token || github.token }}
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@v4
+        with: {name: workline-sample}
+      - env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+        run: |
+          if [ -n "$APP" ]; then
+            git config user.name "$APP[bot]"
+            git config user.email "$(gh api "/users/$APP%5Bbot%5D" --jq .id)+$APP[bot]@users.noreply.github.com"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          fi
+          status=0
+          workline sample --apply sample.json --forge github --summary workline-summary.md || status=$?
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

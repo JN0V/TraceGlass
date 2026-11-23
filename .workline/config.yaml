@@ -1,0 +1,37 @@
+roles:
+  product-owner:
+    settings:
+      # The product owner splits a large issue; effort feeds the size an
+      # issue is ready at. A draft or a question waits the default 24 h.
+      acts: {split: {mode: act}, effort: {mode: act}}
+  tester:
+    settings:
+      # Gradle's JVM unit tests, one JUnit report a test class, in each
+      # module's build folder. Kotlin's and Gradle's build errors are the
+      # role's own rows (build-errors), file:// paths read from the root.
+      test-command: ./gradlew --console=plain testDebugUnitTest
+      test-report: "**/build/test-results/testDebugUnitTest/*.xml"
+      # {packages}: the modules a change touches (./core/timelapse), turned
+      # into their tasks (:core:timelapse:testDebugUnitTest); a file of the
+      # root build, or outside any module, runs the whole suite.
+      module-files: [build.gradle.kts]
+      draft-command: './gradlew --console=plain $(echo {packages} | sed -E ''s#\./##g; s#/#:#g; s#([^ ]+)#:\1:testDebugUnitTest#g'')'
+      test-paths: ["**/src/test/**"]
+  developer:
+    settings:
+      # Its proof on the modules its code and the tests touch; the pull
+      # request's CI builds, tests and lints every module.
+      proof-command: './gradlew --console=plain $(echo {packages} | sed -E ''s#\./##g; s#/#:#g; s#([^ ]+)#:\1:testDebugUnitTest#g'')'
+
+routing:
+  # On a pull request, the committer and the documentalist, the tester's
+  # guard on its own branches, then the reviewer reads the code. On an
+  # issue's label (workline-develop.yml): to refine wakes the product
+  # owner, then the reviewer reads its spec; waiting for its tests wakes
+  # the tester; ready wakes the developer.
+  events: {pre-push: [committer, documentalist], merge-request: [committer, documentalist, tester, reviewer],
+    schedule: [documentalist, product-owner, reviewer], issue: [product-owner, reviewer, tester, developer]}
+
+# Cautious: the forge merges only what the owner accepted with the
+# label workline:accepted; nothing merges alone.
+merge: {autonomy: cautious}

@@ -1,0 +1,392 @@
+# workline gardening on GitHub Actions — copy to .github/workflows/workline-gardening.yml.
+#
+# On a schedule, the project's `schedule` line runs (by default the
+# documentalist; add the product owner to keep the backlog, docs/ci.md):
+# each task it takes up becomes a pull request of its own, on a branch
+# workline/<role>/<task>, updated when the task runs again, and no more are
+# proposed while max-open-merge-requests of them wait.
+# The review is on those pull requests; nothing is merged here.
+# The tester, when the line lists it, writes a ready issue's tests, one
+# issue a run, opened as a Draft: install your test runner in
+# propose, where it proves them red.
+# The developer, when the line lists it, takes the first ready issue nobody
+# took, one a run, and opens its pull request: install your test
+# runner in propose, where it proves its code. workline-develop.yml takes an
+# issue as soon as it is labelled ready.
+# The tester's curator measures the test corpus, opt-in (curator below).
+# And a release's dry run: what would hold the release if it were cut now,
+# said in the default branch's issue (dry-run below). The release never
+# waits for the docs.
+#
+# Two jobs, two trust zones, as for pull requests (workline.yml):
+#   propose runs the line. With the secret CLAUDE_CODE_OAUTH_TOKEN (`claude
+#          setup-token`, a Claude subscription), Claude judges, in the one
+#          step that needs the token; without it, only derived blocks are
+#          regenerated. It reads the open pull requests, and writes nothing.
+#          The subscription's limits are shared with its owner: run it at
+#          night, and keep ai-max-calls and max-open-merge-requests low.
+#   apply  holds the write token and no AI key: it commits, pushes the
+#          branch, and opens or updates the pull request; then it rebuilds
+#          on main those main moved under, or closes them, saying why, when
+#          nothing is left to merge (`workline follow --gardening`). With a GitHub App
+#          (variable WORKLINE_APP_ID, secret WORKLINE_APP_PRIVATE_KEY in the
+#          environment workline-app, which only the default branch may use), the
+#          pull request runs your checks by itself; with the job's own token,
+#          GitHub waits for someone to approve them, and the repository must
+#          let Actions create pull requests (Settings → Actions → General).
+name: workline gardening
+# Each run named by its job, what `workline tick` reads to know it ran
+# (docs/tick.md): the full run on Sunday, every role, `docs and backlog`; any other schedule you add, the
+# nightly; by hand, the job its input names, else `workline gardening
+# by hand`, a name no job of the tick claims.
+run-name: >-
+  ${{ (github.event.schedule == '7 18 * * 0' && 'workline gardening docs and backlog') ||
+  (github.event.schedule && 'workline gardening nightly') ||
+  (contains(fromJSON('["backlog","nightly","docs","docs and backlog"]'), inputs.job) && format('workline gardening {0}', inputs.job)) || 'workline gardening by hand' }}
+on:
+  # Sundays, 18:07 UTC: the docs pull request lands before Monday's
+  # workday, though GitHub may start a run hours late; nightly
+  # ("17 2 * * *") to catch up a backlog. Off the hour: GitHub may drop a
+  # run scheduled at its start, when busiest.
+  schedule: [{cron: "7 18 * * 0"}]
+  workflow_dispatch:
+    inputs:
+      job: {description: "the job this run is named for: backlog, nightly, docs or docs and backlog (it runs the schedule line all the same)", required: false, default: ""}
+permissions: {}
+
+# One run at a time per job: a backlog run (the nightly's too) waits for
+# the one going, so two product owners never act on the same issues; a
+# docs run likewise, beside it.
+concurrency:
+  group: ${{ inputs.job == 'docs' && 'workline-gardening-docs' || 'workline-gardening-backlog' }}
+  cancel-in-progress: false
+
+env:
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
+  # the job summary (--summary) needs the first release after v0.16.0
+  WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
+
+jobs:
+  propose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    # issues: the product owner, when the schedule line runs it, reads them.
+    permissions: {contents: read, pull-requests: read, issues: read}
+    env: {HAS_CLAUDE: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}"}
+    outputs:
+      proposed: ${{ steps.line.outputs.proposed }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}   # no token left in .git/config for the developer's agent
+      # The engine at the version pinned above, and the tools its roles use,
+      # from their releases, checksums verified: seconds, not a build.
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+      - name: Claude, when the repository gives its token
+        if: env.HAS_CLAUDE == 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: The schedule line (proposals only)
+        id: line
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKLINE_APP_ID: ${{ vars.WORKLINE_APP_ID }}   # the App whose comments keep the records a role reads back
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          ai=none; [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && ai=claude
+          status=0
+          workline route schedule --ai "$ai" --no-apply --forge github --open-merge-request --summary workline-summary.md --json > line.json || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "proposed=$(jq '(.pending // []) | length > 0' line.json)" >> "$GITHUB_OUTPUT"
+          [ ! -s workline-summary.md ] || cat workline-summary.md
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.line.outputs.proposed == 'true' || failure() || (steps.line.outputs.status != '' && steps.line.outputs.status != '0')
+        with: {name: workline-runs, path: "line.json\n.workline-runs", include-hidden-files: true}
+
+      - name: Verdict
+        run: |
+          status=${{ steps.line.outputs.status }}
+          if [ "$status" = 3 ]; then
+            echo "::warning title=workline::the agent could not be reached; the docs are listed in the summary, for a person"
+            exit 0
+          fi
+          if [ "${status:-0}" != 0 ]; then
+            # The reason in the log: the summary, as an error annotation.
+            msg=$(jq -r '.summary // empty' line.json 2>/dev/null | head -c 2000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=workline::${msg:-the run ended with status $status, see its result file}"
+          fi
+          exit "$status"
+      # What this job's agent calls spent, a line a run: role, target,
+      # calls, tokens, seconds; no prompt, no diff. Kept 14 days for the
+      # weekly sample's tokens; the run folders
+      # keep their day. Also in a cancelled run (a newer push's), named so, not always(); in each
+      # attempt of a re-run, its own artifact; not in a merge queue's, which asks no agent. The
+      # first release after v0.75.0; an engine before it keeps none, said.
+      - name: The runs' tally
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        run: 'workline sample --tally workline-tally.jsonl || echo "workline: no tally kept"'
+      - uses: actions/upload-artifact@v4
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        with: {name: "workline-tally-${{ github.job }}-${{ github.run_attempt }}", path: workline-tally.jsonl, if-no-files-found: ignore, retention-days: 14}
+
+  # Every night, proposed or not: it also tends the pull requests gardening
+  # opened before.
+  # Also the curator's proven removal, when it proposed one (its job's
+  # run): the write token, no agent's key.
+  apply:
+    needs: [propose, curator]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: workline-app       # the App's key: the default branch only
+    # issues: the product owner's acts (comments, labels, closings,
+    # reactions) on each issue.
+    # actions: the next steps of the states the night moved, started.
+    # statuses: the line's verdicts, read by the reconcile.
+    permissions: {contents: write, pull-requests: write, issues: write, actions: write, statuses: read}
+    steps:
+      - id: app
+        if: vars.WORKLINE_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.WORKLINE_APP_ID }}
+          private-key: ${{ secrets.WORKLINE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token || github.token }}
+      # The engine at the version pinned above, and the tools its roles use,
+      # from their releases, checksums verified: seconds, not a build.
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+      - uses: actions/download-artifact@v4
+        if: needs.propose.outputs.proposed == 'true'
+        with: {name: workline-runs}
+      - uses: actions/download-artifact@v4
+        if: needs.curator.outputs.run != ''
+        with: {name: workline-curate, path: .workline-runs}
+      - env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+          WORKLINE_APP: ${{ steps.app.outputs.app-slug }}   # workline's own account: the records it trusts
+          PROPOSED: ${{ needs.propose.outputs.proposed }}
+          CURATED: ${{ needs.curator.outputs.run }}   # the curator's run, when it proposed a removal
+        run: |
+          if [ -n "$APP" ]; then
+            git config user.name "$APP[bot]"
+            git config user.email "$(gh api "/users/$APP%5Bbot%5D" --jq .id)+$APP[bot]@users.noreply.github.com"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          fi
+          status=0
+          [ "$PROPOSED" != true ] || workline apply --line line.json --summary workline-summary.md || status=$?
+          if [ -n "$CURATED" ]; then
+            if printf '%s' "$CURATED" | grep -Eqx '[0-9]{8}T[0-9]{6}\.[0-9]{9}-[a-z0-9-]+' && [ -d "$WORKLINE_RUNS_DIR/$CURATED" ]; then
+              workline apply "$CURATED" --summary workline-summary.md || status=$?
+            else
+              echo "::error title=workline::the curator named no run of its own: $CURATED"; status=1
+            fi
+          fi
+          # Its pull requests main moved under: rebuilt on it, or closed when
+          # nothing is left to merge; one a person committed to is theirs.
+          # Needs the first release after v0.24.0.
+          workline follow --gardening --base "$GITHUB_REF_NAME" --forge github --summary workline-summary.md || status=$?
+          # The normal size of an issue, from the line's records: one comment
+          # kept in place, reported only. Needs the first
+          # release after v0.73.0.
+          workline size --forge github --summary workline-summary.md || status=$?
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      # The states the night moved, the product owner's ready or
+      # needs-tests: their next steps started now, by the line's workflow
+      # (workline-develop.yml), not at the reconciler's next hour.
+      # No agent; none started without that workflow.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          # Read only: reconcile=list writes nothing, and this token is not the App's.
+          WORKLINE_APP: ${{ steps.app.outputs.app-slug }}   # the App whose statuses keep the verdicts read back
+        run: |
+          gh workflow view workline-develop.yml >/dev/null 2>&1 || exit 0
+          workline route reconcile --ai none --forge github --open-merge-request --input reconcile=list --json > due.json || exit 0
+          # An issue with a run queued or running is not started again.
+          busy=$(for s in queued in_progress pending waiting; do
+            gh run list --workflow workline-develop.yml --status "$s" --limit 100 --json displayTitle --jq '.[].displayTitle'
+          done) || busy=
+          for n in $(jq -r '(.due // [])[]' due.json); do
+            if printf '%s\n' "$busy" | grep -qxF "workline develop #$n"; then
+              echo "#$n: a run of it is queued or running"; continue
+            fi
+            gh workflow run workline-develop.yml --ref "$GITHUB_REF_NAME" -f issue="$n" ||
+              echo "::warning title=workline::#$n's run not started: the reconciler starts it"
+          done
+
+  # A release's dry run, every night this runs: what would hold
+  # the release if it were cut now from this branch's tip. The release's
+  # line, every step, no agent, nothing applied: said as warnings, never a
+  # block. Install the tools of the gates your `release` line runs here.
+  # dry-run-post says what it found in the default branch's issue
+  # (docs/release.md).
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    # issues, checks, statuses and actions read: what holds the release, an
+    # open issue labelled workline:hold-release, main's tip not green
+    # (docs/release-holds.md); a private repository's are unread without.
+    permissions: {contents: read, issues: read, checks: read, statuses: read, actions: read}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+      - name: What would hold the release (said, never a block)
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          workline route release --dry-run --forge github --summary workline-summary.md --json > dry-run.json
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: workline-dry-run, path: dry-run.json, if-no-files-found: ignore}
+
+  # The tester's curator, its measures, no agent: the
+  # project's tests run on this branch's tip, each test's time and result
+  # kept from one run to the next in the artifact workline-curator, read
+  # back here (one run within its 90 days keeps it). Said in the job's
+  # summary. Opt-in: the repository variable WORKLINE_CURATOR set to on,
+  # the tester's test-command set, your test runner installed below. With
+  # the secret CLAUDE_CODE_OAUTH_TOKEN too, the agent weighs one folder of
+  # tests and proposes a few redundant ones removed; the engine proves it
+  # with no agent (coverage and killed mutants before and after), and
+  # apply opens the pull request, merged by your merge policy
+  # (step 7, roles/tester/docs/curator.md).
+  curator:
+    if: vars.WORKLINE_CURATOR == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # actions: the last run's artifact, the history; pull-requests: the
+    # tester's open Drafts, whose tests are never removed.
+    permissions: {contents: read, actions: read, pull-requests: read}
+    env: {HAS_CLAUDE: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}"}
+    outputs:
+      run: ${{ steps.curate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+      # Your test runner here, as the test-command needs it (gotestsum,
+      # pytest, jest-junit…).
+      - name: The history, from the last measure's artifact
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=workline-curator&per_page=30" \
+            --jq "[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == \"$GITHUB_REF_NAME\")][0].id // empty")
+          if [ -z "$id" ]; then echo "::notice title=workline::no history of the curator's: the first measure"; exit 0; fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > curator.zip && unzip -oq curator.zip curator-history.json
+      - name: The corpus's measures (said, never a block)
+        run: |
+          status=0
+          workline test measure --history curator-history.json --summary workline-summary.md || status=$?
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Claude, when the repository gives its token
+        if: env.HAS_CLAUDE == 'true'
+        run: npm install -g @anthropic-ai/claude-code
+      # Your mutation tool here when curator-mutation-command does not
+      # fetch it itself (`go run …gremlins@<version>` does).
+      - name: A few redundant tests removed, proven (proposed only)
+        id: curate
+        if: env.HAS_CLAUDE == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKLINE_APP_ID: ${{ vars.WORKLINE_APP_ID }}   # the App whose comments keep the tester's records
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          status=0
+          workline test curate --history curator-history.json --ai claude --no-apply --forge github --json > curate.json || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "run=$(jq -r '(.pending // [])[0] // empty | split("/") | last' curate.json)" >> "$GITHUB_OUTPUT"   # a run left to apply, by name
+          jq -r '"**The curator**: " + (.summary // "")' curate.json >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" = 3 ]; then echo "::warning title=workline::the agent could not be reached; the next week weighs again"; exit 0; fi
+          if [ "$status" != 0 ]; then
+            msg=$(jq -r '.summary // empty' curate.json 2>/dev/null | head -c 2000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=workline::${msg:-the run ended with status $status, see its result file}"
+          fi
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: steps.curate.outputs.run != '' || failure() || (steps.curate.outputs.status != '' && steps.curate.outputs.status != '0')
+        with: {name: workline-curate, path: ".workline-runs", include-hidden-files: true, retention-days: 1}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: workline-curator, path: curator-history.json, if-no-files-found: ignore, retention-days: 90}
+      # What this job's agent calls spent, a line a run: role, target,
+      # calls, tokens, seconds; no prompt, no diff. Kept 14 days for the
+      # weekly sample's tokens; the run folders
+      # keep their day. Also in a cancelled run (a newer push's), named so, not always(); in each
+      # attempt of a re-run, its own artifact; not in a merge queue's, which asks no agent. The
+      # first release after v0.75.0; an engine before it keeps none, said.
+      - name: The runs' tally
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        run: 'workline sample --tally workline-tally.jsonl || echo "workline: no tally kept"'
+      - uses: actions/upload-artifact@v4
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        with: {name: "workline-tally-${{ github.job }}-${{ github.run_attempt }}", path: workline-tally.jsonl, if-no-files-found: ignore, retention-days: 14}
+
+  dry-run-post:
+    needs: dry-run
+    if: always()                    # a dry run that left no result is said
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: workline-app       # the App's key: the default branch only
+    # One writer of the default branch's issue at a time, with main's.
+    concurrency: {group: "workline-main-issue", cancel-in-progress: false}
+    permissions: {contents: read, issues: write}
+    steps:
+      - id: app
+        if: vars.WORKLINE_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.WORKLINE_APP_ID }}
+          private-key: ${{ secrets.WORKLINE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: workline
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+      - uses: actions/download-artifact@v4
+        continue-on-error: true         # none: said below
+        with: {name: workline-dry-run}
+      - env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+        run: |
+          [ -s dry-run.json ] || { echo "::warning title=workline::the release's dry run left no result: nothing posted"; exit 0; }
+          status=0
+          workline apply --release-dry-run dry-run.json --forge github --summary workline-summary.md || status=$?
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

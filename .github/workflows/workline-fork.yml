@@ -1,0 +1,58 @@
+# workline on a fork's pull request — copy to .github/workflows/workline-fork.yml,
+# beside workline.yml.
+#
+# A pull request from a fork gets no secret and no right to write: workline.yml
+# only judges it, with no agent, and leaves its report as an artifact. This
+# workflow runs once that one is done, from the repository's side, with one
+# right: to comment on pull requests. It runs nothing from the fork, and
+# reads the report as text a fork could have written (docs/research/
+# ci-and-forge.md): the pull request it names must have the commit judged as
+# its head; mentions are defused; one comment is kept, edited on each run.
+# A run a newer push cancelled is not commented: the newer one is.
+name: workline fork
+on:
+  workflow_run:
+    workflows: [workline]
+    types: [completed]
+permissions: {}
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.head_repository.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: {actions: read, pull-requests: write}
+    steps:
+      - name: The report the fork's run left
+        id: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n workline-report -D report || { echo "no report"; exit 0; }
+          echo "found=true" >> "$GITHUB_OUTPUT"
+      - name: Comment it on the pull request
+        if: steps.report.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          n=$(head -c 12 report/number | tr -cd 0-9)
+          [ -n "$n" ] || { echo "no pull request number"; exit 1; }
+          # The number comes from the fork's run: it must name the pull
+          # request whose head was judged, or nothing is said.
+          head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n" --jq .head.sha)
+          [ "$head" = "$HEAD" ] || { echo "pull request #$n has head $head, not $HEAD: no comment"; exit 0; }
+          marker='<!-- workline:fork-report -->'
+          { echo "$marker"
+            head -c 60000 report/report.md | sed 's/@/@\xe2\x80\x8b/g'
+            echo
+            echo "_From a fork, nothing is pushed: a maintainer applies what is right._"
+          } > body.md
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$n/comments" --paginate \
+            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\")))][0].id // empty")
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@body.md --silent
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$n/comments" -F body=@body.md --silent
+          fi

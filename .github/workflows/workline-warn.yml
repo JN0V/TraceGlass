@@ -1,0 +1,179 @@
+# workline on GitHub Actions, what only warns, apart from the verdict — copy
+# to .github/workflows/workline-warn.yml, beside workline.yml and
+# workline-apply.yml (the first release after v0.36.0).
+#
+# The reviewer's lenses that only warn (its `ai-findings`):
+# workline.yml's propose asks the lenses that block (--warn-apart), and the
+# head's verdict waits for nothing else. This workflow asks the others on
+# the same push, beside it (--warn-only); workline-apply.yml posts what they
+# found once they answered, in a comment of their own, maybe after the
+# verdict was given. Never a verdict, never holding one: a lens that fails
+# is said there, the job green; only the engine's own error fails it.
+# Without the reviewer in the line, or with every lens blocking, it ends at
+# once.
+#
+# The inspector's triage too, when the line routes it: it waits
+# for workline.yml's gates job on the same head, reads the result that job
+# left (`--gates-from`), and posts the triage in a comment of its own. The
+# gates never run here: this job holds the agent's token.
+#
+# The pull request's own, as workline.yml: GitHub runs the copy its branch
+# holds; no write token, never the GitHub App's key. With the
+# secret CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`, a Claude
+# subscription), Claude reads; for another agent, change --ai to a `cmd:`.
+# Without it, or on a fork, which gets no secrets, it ends at once: the
+# lenses need an agent.
+name: workline warn
+on:
+  pull_request: {types: [opened, synchronize, reopened, ready_for_review]}
+permissions: {}
+# One run per pull request: a push cancels the run still on the head before,
+# whose record did not move: the newer run reads its commits too.
+concurrency: {group: "workline-warn-${{ github.event.pull_request.number }}", cancel-in-progress: true}
+
+env:
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
+
+jobs:
+  warn:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # One review apart at a time per pull request, with workline-apply.yml's
+    # apply of this workflow's runs, neither cancelling the other: a push
+    # waits while the run before it is applied, then reads its record.
+    concurrency: {group: "workline-warn-review-${{ github.event.pull_request.number }}", cancel-in-progress: false}
+    # pull-requests read: its own comment, the record of what it read, and
+    # the pull request's title and body; actions read: the gates' result
+    # of workline.yml's run, for the inspector.
+    permissions: {contents: read, pull-requests: read, actions: read}
+    env:
+      HAS_CLAUDE: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}"
+    steps:
+      - name: No agent, nothing read apart
+        if: env.HAS_CLAUDE != 'true'
+        run: echo "no CLAUDE_CODE_OAUTH_TOKEN, nothing is read apart; the lenses that warn need an agent"
+      - uses: actions/checkout@v4
+        if: env.HAS_CLAUDE == 'true'
+        with: {fetch-depth: 0, ref: "${{ github.event.pull_request.head.sha }}"}
+      # What reads apart is the reviewer's lenses that warn and the
+      # inspector's triage: with neither in the project's config, nothing
+      # reads apart, nothing is installed. Nor when no workflow applies what
+      # they propose, said: their record would never move, and every push
+      # read them all again.
+      - name: Whether anything reads apart
+        id: any
+        if: env.HAS_CLAUDE == 'true'
+        run: |
+          if ! grep -qswE 'reviewer|inspector' .workline/config.yaml; then
+            echo "no reviewer nor inspector in .workline/config.yaml, nothing reads apart"
+          elif ! grep -qsE 'workflows: \[.*workline warn' .github/workflows/*.yml; then
+            echo "::warning title=workline::no workflow applies what the lenses that warn propose, so they do not read; copy workline-apply.yml of this release beside workline-warn.yml (docs/ci-github.md)"
+          else
+            echo "any=true" >> "$GITHUB_OUTPUT"
+            ! grep -qsw inspector .workline/config.yaml || echo "triage=true" >> "$GITHUB_OUTPUT"
+          fi
+      # The pull request's draft state as it is now, not as its event said:
+      # marked ready seconds after a push, the push's run can be
+      # the one the concurrency group keeps, its event still saying draft.
+      # Unread, the event's, said.
+      - name: The pull request, a draft or not
+        id: pr
+        if: steps.any.outputs.any == 'true'
+        env: {GH_TOKEN: "${{ github.token }}", EVENT_DRAFT: "${{ github.event.pull_request.draft }}", NUMBER: "${{ github.event.pull_request.number }}"}
+        run: |
+          draft=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" --jq .draft) || draft=
+          case "$draft" in true|false) ;; *) draft=$EVENT_DRAFT; echo "::warning title=workline::the pull request's draft state could not be read, the event's taken: $EVENT_DRAFT" ;; esac
+          echo "draft=$draft" >> "$GITHUB_OUTPUT"
+      # The engine at the version pinned above, checksum verified, and the
+      # agent; not on a draft, which asks none: the engine only
+      # keeps the record there.
+      - name: workline, and Claude
+        if: steps.any.outputs.any == 'true'
+        env: {DRAFT: "${{ steps.pr.outputs.draft }}"}
+        run: |
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
+          get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/workline" version
+          [ "$DRAFT" = true ] || npm install -g @anthropic-ai/claude-code
+      # The inspector triages what the gates found the change adds:
+      # their result as workline.yml's gates job left it for
+      # this head, the same the verdict counted; never the gates run again
+      # here, in the agent's reach. Waited for, 15 minutes at most; none,
+      # said, and the triage reads nothing. Not on a draft, which asks no
+      # agent.
+      - name: The gates' findings, from workline.yml's run of this head
+        if: steps.any.outputs.triage == 'true' && steps.pr.outputs.draft != 'true'
+        env: {GH_TOKEN: "${{ github.token }}", HEAD_SHA: "${{ github.event.pull_request.head.sha }}"}
+        run: |
+          run=
+          for i in $(seq 90); do
+            run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow workline.yml --commit "$HEAD_SHA" --event pull_request --json databaseId --jq '.[0].databaseId // empty')
+            [ -z "$run" ] || [ "$(gh run view "$run" -R "$GITHUB_REPOSITORY" --json jobs --jq '[.jobs[] | select(.name == "gates")][0].status // empty')" != completed ] || break
+            sleep 10
+          done
+          if [ -n "$run" ] && gh run download "$run" -R "$GITHUB_REPOSITORY" -n workline-gates -D "$RUNNER_TEMP/gates"; then
+            echo "the gates' result of workline.yml's run $run"
+          else
+            echo "::warning title=workline::no gates' result from workline.yml's run of $HEAD_SHA: the inspector triages nothing"
+          fi
+      - name: What only warns, apart from the verdict (proposals only)
+        id: line
+        if: steps.any.outputs.any == 'true'
+        # As workline.yml's propose: every lens once when opened or marked
+        # ready, the draft state on every run; on a draft,
+        # no lens.
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+          WORKLINE_APP_ID: ${{ vars.WORKLINE_APP_ID }}   # the App whose comments keep the records a role reads back
+          ACTION: ${{ github.event.action }}
+          EVENT_DRAFT: ${{ github.event.pull_request.draft }}
+          DRAFT: ${{ steps.pr.outputs.draft }}
+        run: |
+          ready=; case "$ACTION:$EVENT_DRAFT:$DRAFT" in opened:*:false|ready_for_review:*|*:true:false) ready=1 ;; esac
+          gates=; [ ! -s "$RUNNER_TEMP/gates/gates.json" ] || gates="$RUNNER_TEMP/gates/gates.json"
+          status=0
+          workline route merge-request --warn-only --ai claude --no-apply \
+            --forge github --target merge-request:${{ github.event.pull_request.number }} --branch "$HEAD_REF" \
+            --input range=${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} ${ready:+--input lenses=all} --input draft="$DRAFT" \
+            ${gates:+--gates-from "$gates"} --summary workline-summary.md --json > line.json || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "proposed=$(jq '(.pending // []) | length > 0' line.json)" >> "$GITHUB_OUTPUT"
+          [ ! -s workline-summary.md ] || cat workline-summary.md
+          [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p report && echo "${{ github.event.pull_request.number }}" > report/number
+      # Applied by workline-apply.yml, from the default branch.
+      - uses: actions/upload-artifact@v4
+        if: steps.line.outputs.proposed == 'true' || failure() || (steps.line.outputs.status != '' && steps.line.outputs.status != '0')
+        with: {name: workline-runs, path: "line.json\n.workline-runs\nreport/number", include-hidden-files: true}
+      # Never the head's verdict: what only warns fails no check. An agent
+      # out of reach (3) is said; only the engine's own error fails the job.
+      - name: Said
+        if: steps.any.outputs.any == 'true'
+        env: {STATUS: "${{ steps.line.outputs.status }}"}
+        run: |
+          case "$STATUS" in
+            0) ;;
+            3) echo "::warning title=workline::the agent could not be reached: the lenses that warn did not read this push" ;;
+            *)
+              msg=$(jq -r '.summary // empty' line.json 2>/dev/null | head -c 2000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+              echo "::error title=workline::${msg:-the run ended with status $STATUS, see its result file}"
+              exit "${STATUS:-1}" ;;
+          esac
+      # What this job's agent calls spent, a line a run: role, target,
+      # calls, tokens, seconds; no prompt, no diff. Kept 14 days for the
+      # weekly sample's tokens; the run folders
+      # keep their day. Also in a cancelled run (a newer push's), named so, not always(); in each
+      # attempt of a re-run, its own artifact; not in a merge queue's, which asks no agent. The
+      # first release after v0.75.0; an engine before it keeps none, said.
+      - name: The runs' tally
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        run: 'workline sample --tally workline-tally.jsonl || echo "workline: no tally kept"'
+      - uses: actions/upload-artifact@v4
+        if: "(success() || failure() || cancelled()) && github.event_name != 'merge_group'"
+        with: {name: "workline-tally-${{ github.job }}-${{ github.run_attempt }}", path: workline-tally.jsonl, if-no-files-found: ignore, retention-days: 14}
