@@ -8,10 +8,10 @@
 # The review is on those pull requests; nothing is merged here.
 # The tester, when the line lists it, writes a ready issue's tests, one
 # issue a run, opened as a Draft: install your test runner in
-# judge, where it proves them red.
+# propose, where it proves them red.
 # The developer, when the line lists it, takes the first ready issue nobody
 # took, one a run, and opens its pull request: install your test
-# runner in judge, where it proves its code. workline-develop.yml takes an
+# runner in propose, where it proves its code. workline-develop.yml takes an
 # issue as soon as it is labelled ready.
 # The tester's curator measures the test corpus, opt-in (curator below).
 # And a release's dry run: what would hold the release if it were cut now,
@@ -19,7 +19,7 @@
 # waits for the docs.
 #
 # Two jobs, two trust zones, as for pull requests (workline.yml):
-#   judge  runs the line. With the secret CLAUDE_CODE_OAUTH_TOKEN (`claude
+#   propose runs the line. With the secret CLAUDE_CODE_OAUTH_TOKEN (`claude
 #          setup-token`, a Claude subscription), Claude judges, in the one
 #          step that needs the token; without it, only derived blocks are
 #          regenerated. It reads the open pull requests, and writes nothing.
@@ -36,13 +36,13 @@
 #          let Actions create pull requests (Settings → Actions → General).
 name: workline gardening
 # Each run named by its job, what `workline tick` reads to know it ran
-# (docs/tick.md): the docs on Sunday; any other schedule you add, the
+# (docs/tick.md): the full run on Sunday, every role, `docs and backlog`; any other schedule you add, the
 # nightly; by hand, the job its input names, else `workline gardening
 # by hand`, a name no job of the tick claims.
 run-name: >-
-  ${{ (github.event.schedule == '7 18 * * 0' && 'workline gardening docs') ||
+  ${{ (github.event.schedule == '7 18 * * 0' && 'workline gardening docs and backlog') ||
   (github.event.schedule && 'workline gardening nightly') ||
-  (contains(fromJSON('["backlog","nightly","docs"]'), inputs.job) && format('workline gardening {0}', inputs.job)) || 'workline gardening by hand' }}
+  (contains(fromJSON('["backlog","nightly","docs","docs and backlog"]'), inputs.job) && format('workline gardening {0}', inputs.job)) || 'workline gardening by hand' }}
 on:
   # Sundays, 18:07 UTC: the docs pull request lands before Monday's
   # workday, though GitHub may start a run hours late; nightly
@@ -51,23 +51,23 @@ on:
   schedule: [{cron: "7 18 * * 0"}]
   workflow_dispatch:
     inputs:
-      job: {description: "the job this run is named for: backlog, nightly or docs (it runs the schedule line all the same)", required: false, default: ""}
+      job: {description: "the job this run is named for: backlog, nightly, docs or docs and backlog (it runs the schedule line all the same)", required: false, default: ""}
 permissions: {}
 
 # One run at a time per job: a backlog run (the nightly's too) waits for
 # the one going, so two product owners never act on the same issues; a
 # docs run likewise, beside it.
 concurrency:
-  group: ${{ (github.event.schedule == '7 18 * * 0' || inputs.job == 'docs') && 'workline-gardening-docs' || 'workline-gardening-backlog' }}
+  group: ${{ inputs.job == 'docs' && 'workline-gardening-docs' || 'workline-gardening-backlog' }}
   cancel-in-progress: false
 
 env:
-  WORKLINE_VERSION: v0.85.0          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
   # the job summary (--summary) needs the first release after v0.16.0
   WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
 
 jobs:
-  judge:
+  propose:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     # issues: the product owner, when the schedule line runs it, reads them.
@@ -141,7 +141,7 @@ jobs:
   # Also the curator's proven removal, when it proposed one (its job's
   # run): the write token, no agent's key.
   apply:
-    needs: [judge, curator]
+    needs: [propose, curator]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -172,7 +172,7 @@ jobs:
           echo "$bin" >> "$GITHUB_PATH"
           "$bin/workline" version
       - uses: actions/download-artifact@v4
-        if: needs.judge.outputs.proposed == 'true'
+        if: needs.propose.outputs.proposed == 'true'
         with: {name: workline-runs}
       - uses: actions/download-artifact@v4
         if: needs.curator.outputs.run != ''
@@ -181,7 +181,7 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
           APP: ${{ steps.app.outputs.app-slug }}
           WORKLINE_APP: ${{ steps.app.outputs.app-slug }}   # workline's own account: the records it trusts
-          PROPOSED: ${{ needs.judge.outputs.proposed }}
+          PROPOSED: ${{ needs.propose.outputs.proposed }}
           CURATED: ${{ needs.curator.outputs.run }}   # the curator's run, when it proposed a removal
         run: |
           if [ -n "$APP" ]; then

@@ -11,7 +11,7 @@
 # comment or a project workflow failed on its branch (its tests red) runs
 # a review round: its fix pushed on its branch
 # (docs/review-loop.md); the reconciler starts one an event missed.
-#   judge, review          the agent and a read token; your setup steps run there first:
+#   propose, review        the agent and a read token; your setup steps run there first:
 #                          .github/actions/workline-setup/action.yml, when you have it.
 #   apply, review-apply    the App's key (environment workline-app), no AI key.
 #   heartbeat              no token; the environment workline-heartbeat, its wait
@@ -70,11 +70,11 @@ on:
 permissions: {}
 
 env:
-  WORKLINE_VERSION: v0.85.0          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
   WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
 
 jobs:
-  judge:
+  propose:
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs['pull-request'] == '' && inputs.reconcile == '') ||
       (github.event_name == 'issues' && startsWith(github.event.label.name, 'workline:') && github.event.sender.type != 'Bot' &&
@@ -233,8 +233,8 @@ jobs:
         with: {name: "workline-tally-${{ github.job }}-${{ github.run_attempt }}", path: workline-tally.jsonl, if-no-files-found: ignore, retention-days: 14}
 
   apply:
-    needs: judge
-    if: always() && needs.judge.outputs.proposed == 'true'
+    needs: propose
+    if: always() && needs.propose.outputs.proposed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: workline-app       # the App's key: the default branch only

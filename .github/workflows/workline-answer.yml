@@ -1,6 +1,6 @@
 # workline's tester answering an objection, on GitHub Actions — copy to
 # .github/workflows/workline-answer.yml, with workline-objection.yml beside it.
-# judge: the agent (secret CLAUDE_CODE_OAUTH_TOKEN), no write token; it runs
+# propose: the agent (secret CLAUDE_CODE_OAUTH_TOKEN), no write token; it runs
 # your test command on the Draft's head: install your test runner there.
 # apply: the App's key (environment workline-app), no AI key, from the
 # default branch's checkout. Why: docs/objection-jobs.md.
@@ -19,11 +19,11 @@ permissions: {}
 concurrency: {group: "workline-answer-${{ github.event.workflow_run.head_branch || inputs.branch }}", cancel-in-progress: false}
 
 env:
-  WORKLINE_VERSION: v0.85.0          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
   WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
 
 jobs:
-  judge:
+  propose:
     if: >-
       (github.event_name == 'workflow_dispatch' && startsWith(inputs.branch, 'workline/tester/')) ||
       (github.event_name == 'workflow_run' &&
@@ -97,7 +97,7 @@ jobs:
           HEAD_SHA: ${{ steps.head.outputs.head }}
         run: |
           ai=none; [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] && ai=claude
-          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          pr=$(gh pr list --head "$BRANCH" --state open --json number,isCrossRepository --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')
           [ -n "$pr" ] || { echo "no open pull request from $BRANCH: nothing to answer"; exit 0; }
           # The Draft's tip; the engine already set up from the default
           # branch's checkout.
@@ -147,8 +147,8 @@ jobs:
         with: {name: "workline-tally-${{ github.job }}-${{ github.run_attempt }}", path: workline-tally.jsonl, if-no-files-found: ignore, retention-days: 14}
 
   apply:
-    needs: judge
-    if: always() && needs.judge.outputs.state != ''
+    needs: propose
+    if: always() && needs.propose.outputs.state != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: workline-app       # the App's key: the default branch only
@@ -170,26 +170,26 @@ jobs:
           get() { curl -fsSLO "$1/$2" && curl -fsSL "$1/$3" | grep " $2\$" | sha256sum -c - && tar -xzf "$2" -C "$bin" "$4"; }
           get "https://github.com/JN0V/workline/releases/download/$WORKLINE_VERSION" workline_linux_amd64.tar.gz checksums.txt workline
           echo "$bin" >> "$GITHUB_PATH"
-      # judge ran the Draft's code: its folder is data, outside the checkout.
+      # propose ran the Draft's code: its folder is data, outside the checkout.
       - uses: actions/download-artifact@v4
-        if: needs.judge.outputs.run != ''
+        if: needs.propose.outputs.run != ''
         with: {name: workline-answer, path: "${{ runner.temp }}/workline-runs"}
       # Only what the Draft's line may do, to it, at the event's head: the
       # repository, roles and forge this job's (`apply --from-merge-request`).
-      - if: needs.judge.outputs.run != ''
+      - if: needs.propose.outputs.run != ''
         env:
           GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
           APP: ${{ steps.app.outputs.app-slug }}
           WORKLINE_APP: ${{ steps.app.outputs.app-slug }}   # workline's own account: the records it trusts
           # Two upload paths root the artifact at the workspace: the runs are in its .workline-runs.
           WORKLINE_RUNS_DIR: ${{ runner.temp }}/workline-runs/.workline-runs
-          RUN: ${{ needs.judge.outputs.run }}
-          BRANCH: ${{ needs.judge.outputs.branch }}
-          HEAD_SHA: ${{ needs.judge.outputs.head }}
+          RUN: ${{ needs.propose.outputs.run }}
+          BRANCH: ${{ needs.propose.outputs.branch }}
+          HEAD_SHA: ${{ needs.propose.outputs.head }}
         run: |
           printf '%s' "$RUN" | grep -Eqx '[0-9]{8}T[0-9]{6}\.[0-9]{9}-[a-z0-9-]+' && [ -d "$WORKLINE_RUNS_DIR/$RUN" ] ||
-            { echo "::error title=workline::judge named no run of its own: $RUN"; exit 1; }
-          NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+            { echo "::error title=workline::propose named no run of its own: $RUN"; exit 1; }
+          NUMBER=$(gh pr list --head "$BRANCH" --state open --json number,isCrossRepository --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')
           [ -n "$NUMBER" ] || { echo "no open pull request from $BRANCH: nothing to apply"; exit 0; }
           if [ -n "$APP" ]; then
             git config user.name "$APP[bot]"
@@ -205,16 +205,16 @@ jobs:
       # The state this answer ran on, whatever it wrote: answered,
       # refused, failed. The reconciler and a chained run start none
       # again on it, only on a new comment, objection or head. Not
-      # when the agent was unreachable (status 3), judge stopped before
+      # when the agent was unreachable (status 3), propose stopped before
       # answering, or read no state: the next run tries again.
       - name: The answer's state
-        if: always() && needs.judge.outputs.status != '' && needs.judge.outputs.status != '3'
+        if: always() && needs.propose.outputs.status != '' && needs.propose.outputs.status != '3'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
-          BRANCH: ${{ needs.judge.outputs.branch }}
-          STATE: ${{ needs.judge.outputs.state }}
+          BRANCH: ${{ needs.propose.outputs.branch }}
+          STATE: ${{ needs.propose.outputs.state }}
         run: |
-          NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          NUMBER=$(gh pr list --head "$BRANCH" --state open --json number,isCrossRepository --jq '[.[] | select(.isCrossRepository | not)][0].number // empty')
           [ -n "$NUMBER" ] || exit 0
           [ "$STATE" != unread ] || { echo "the state was not read: none marked, the reconciler may start it again"; exit 0; }
           workline test answer --merge-request "$NUMBER" --tried "$STATE" --forge github ||
@@ -223,10 +223,10 @@ jobs:
       # answered by a new run, which ends at once with none left; 5 at
       # most in a chain, then the reconciler resumes.
       - name: The next answer
-        if: success() && needs.judge.outputs.run != '' && fromJSON(inputs.chain || '0') < 4
+        if: success() && needs.propose.outputs.run != '' && fromJSON(inputs.chain || '0') < 4
         env:
           GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ needs.judge.outputs.branch }}
+          BRANCH: ${{ needs.propose.outputs.branch }}
           CHAIN: ${{ inputs.chain || '0' }}
         run: |
           gh workflow run workline-answer.yml --ref "$GITHUB_REF_NAME" -f branch="$BRANCH" -f chain="$((CHAIN + 1))" ||

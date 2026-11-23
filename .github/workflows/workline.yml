@@ -13,11 +13,11 @@
 # default branch, applies what it proposed.
 #   gates  runs the project's gates alone (`gate:<name>` steps; the first
 #          release after v0.35.0), with no write token and no secret: their
-#          tools run the pull request's code. Their verdicts are judge's to
+#          tools run the pull request's code. Their verdicts are propose's to
 #          read; what they found the change adds, workline-apply.yml shows
 #          as the annotations of the check `workline gates` and one summary
 #          comment. Install the tools they run in it.
-#   judge  runs the line; it can read the code and the pull request's
+#   propose runs the line; it can read the code and the pull request's
 #          comments, and holds no write token but
 #          code scanning's, which only uploads its findings as SARIF (free on
 #          public repositories; private ones need GitHub Advanced Security —
@@ -44,7 +44,7 @@
 #          warns when no workflow reads them.
 #
 # A merge queue's group (`merge_group`; the first release after
-# v0.37.0): gates runs the gates on the merged result, judge only says
+# v0.37.0): gates runs the gates on the merged result, propose only says
 # their verdict, the check the queue waits for, no agent installed nor
 # asked. The pull request's head keeps its review and verdict, the
 # person's yes too; nothing is applied. A merge queue is an
@@ -73,10 +73,10 @@ permissions: {}
 # (workline-apply.yml). A queue's group, one run of its own; each commit
 # of main too, a group of its own: none cancels another, each the next
 # base.
-concurrency: {group: "workline-judge-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.sha }}", cancel-in-progress: true}
+concurrency: {group: "workline-propose-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.sha }}", cancel-in-progress: true}
 
 env:
-  WORKLINE_VERSION: v0.85.0          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
   # the job summary (--summary) needs the first release after v0.16.0
   WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
 
@@ -84,7 +84,7 @@ jobs:
   # The project's gates (`gate:<name>` steps of routing's merge-request),
   # alone: their tools run the pull request's code — a linter's config or
   # plugin, a build —, so this job holds no write token and no secret, the
-  # agent's neither. judge reads their verdicts; workline-apply.yml
+  # agent's neither. propose reads their verdicts; workline-apply.yml
   # shows what they found the change adds. With no gate, it ends at once.
   # In a merge queue, on the group's commit: the pull requests ahead of it
   # and this one, merged on the base. On main after a merge, the line of
@@ -135,7 +135,7 @@ jobs:
           echo "ran=$(jq '(.steps // []) | length > 0' gates.json)" >> "$GITHUB_OUTPUT"
           [ ! -s workline-summary.md ] || cat workline-summary.md >> "$GITHUB_STEP_SUMMARY"
           mkdir -p report && echo "${{ github.event.pull_request.number }}" > report/number
-      # Their result, for judge, and for workline-apply.yml to show.
+      # Their result, for propose, and for workline-apply.yml to show.
       - uses: actions/upload-artifact@v4
         if: "!cancelled() && (failure() || steps.gates.outputs.ran == 'true' || (steps.gates.outputs.status != '' && steps.gates.outputs.status != '0'))"
         with: {name: workline-gates, path: "gates.json\nreport/number", retention-days: 1}
@@ -170,7 +170,7 @@ jobs:
           fi
           exit "$status"
 
-  judge:
+  propose:
     # After the gates, whatever their verdict: the line reads it. Not on
     # main, whose run is the gates' job's.
     needs: gates

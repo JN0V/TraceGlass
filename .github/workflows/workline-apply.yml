@@ -12,8 +12,8 @@
 # A run a newer push cancelled (workline.yml's concurrency) gets
 # nothing applied, kept or followed: the newer run's own does.
 #
-#   apply  after workline.yml's judge, holds the write token and no AI key:
-#          it applies what judge proposed (`apply --from-merge-request`). A
+#   apply  after workline.yml's propose, holds the write token and no AI key:
+#          it applies what propose writes (`apply --from-merge-request`). A
 #          doc fix goes in a comment, never pushed to the pull request's
 #          branch. The documentalist's findings are the
 #          annotations of the check `workline findings` on the head judged,
@@ -29,7 +29,7 @@
 #          line judges the commits before it, never the fix again. Nothing is
 #          applied for a fork: workline-fork.yml comments what was found;
 #          follow, below, arms it on a person's yes, its checks green.
-#          One at a time per pull request, with workline.yml's judge: the
+#          One at a time per pull request, with workline.yml's propose: the
 #          next push is judged once the review before it is written. A
 #          branch moved on since the head judged gets the reviewer's review
 #          of that head alone, never a fix.
@@ -37,9 +37,9 @@
 #          v0.36.0): the comment of the reviewer's lenses that warn, and
 #          their comments on lines, posted once they answered, maybe after
 #          the verdict; one at a time per pull request with that workflow's
-#          job, never waiting for judge's nor holding it.
+#          job, never waiting for propose's nor holding it.
 #   verdict with the merge policy, `merge: {autonomy: cautious}`,
-#          after judge alone: the head's verdict kept as the status
+#          after propose alone: the head's verdict kept as the status
 #          workline/verdict, by the App; in no concurrency group, so no newer
 #          run cancels it.
 #   queue  with the merge policy, after workline.yml's run on a merge
@@ -69,16 +69,16 @@ on:
 permissions: {}
 
 env:
-  WORKLINE_VERSION: v0.85.0          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
 
 jobs:
   apply:
-    # A pull request of this repository, judged, whatever judge's verdict:
+    # A pull request of this repository, judged, whatever propose's verdict:
     # steps that passed before one blocked still get their proposals applied.
     # Never a cancelled run: a newer push stopped it, and its run applies.
     if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.head_repository.full_name == github.repository
     # One review at a time per pull request, with workline.yml's
-    # judge, neither cancelling the other: the next push's judge waits for
+    # propose, neither cancelling the other: the next push's propose waits for
     # this apply, and reads the record it writes. A run of workline-warn.yml
     # with that workflow's job, its record its own comment's.
     concurrency: {group: "workline-${{ github.event.workflow_run.name == 'workline warn' && 'warn-review' || 'review' }}-${{ github.event.workflow_run.pull_requests[0].number }}", cancel-in-progress: false}
@@ -89,7 +89,7 @@ jobs:
     # write, the checks holding the documentalist's findings and the gates'.
     permissions: {actions: read, contents: write, pull-requests: write, issues: write, checks: write}
     steps:
-      # What judge proposed, and what the gates found, outside the
+      # What propose writes, and what the gates found, outside the
       # checkout: data, never run.
       - name: What the pull request's run proposed
         id: judged
@@ -155,7 +155,7 @@ jobs:
           exit "$status"
 
   verdict:
-    # judge's run alone: workline-warn.yml's gives no verdict.
+    # propose's run alone: workline-warn.yml's gives no verdict.
     # Never a fork's: its run is the fork's to write, no verdict of it.
     if: github.event_name == 'workflow_run' && github.event.workflow_run.name == 'workline' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
@@ -202,7 +202,7 @@ jobs:
           names=$(GH_TOKEN="$READ_TOKEN" gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN/artifacts" --jq '.artifacts[].name')
           grep -qx workline-verdict <<<"$names" && GH_TOKEN="$READ_TOKEN" gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n workline-verdict -D "$RUNNER_TEMP/verdict"
           verdict="$RUNNER_TEMP/verdict/workline-verdict.json"
-          [ -s "$verdict" ] || { echo "no verdict on $HEAD_SHA: judge stopped before writing it"; exit 0; }
+          [ -s "$verdict" ] || { echo "no verdict on $HEAD_SHA: propose stopped before writing it"; exit 0; }
           head=$(jq -r .head "$verdict")
           [ "$head" = "$HEAD_SHA" ] || { echo "::error title=workline::the verdict is for $head, not the head judged, $HEAD_SHA"; exit 1; }
           status=0

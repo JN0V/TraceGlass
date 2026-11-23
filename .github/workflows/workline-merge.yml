@@ -3,7 +3,7 @@
 # and workline-apply.yml,
 # with `merge: {autonomy: cautious}` (the first release after v0.25.0).
 # pull_request_target: the repository's own run and secrets, the base
-# checked out, nothing of the pull request. No `judge` here: a skipped one
+# checked out, nothing of the pull request. No `propose` here: a skipped one
 # would show the check passed. Only with the GitHub App's token, its key in
 # the environment workline-app, which only the default branch may use.
 # What it does: docs/merge-policy.md.
@@ -25,7 +25,7 @@ on:
 permissions: {}
 
 env:
-  WORKLINE_VERSION: v0.85.0          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
 
 jobs:
   follow:

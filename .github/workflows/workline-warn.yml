@@ -3,7 +3,7 @@
 # workline-apply.yml (the first release after v0.36.0).
 #
 # The reviewer's lenses that only warn (its `ai-findings`):
-# workline.yml's judge asks the lenses that block (--warn-apart), and the
+# workline.yml's propose asks the lenses that block (--warn-apart), and the
 # head's verdict waits for nothing else. This workflow asks the others on
 # the same push, beside it (--warn-only); workline-apply.yml posts what they
 # found once they answered, in a comment of their own, maybe after the
@@ -32,7 +32,7 @@ permissions: {}
 concurrency: {group: "workline-warn-${{ github.event.pull_request.number }}", cancel-in-progress: true}
 
 env:
-  WORKLINE_VERSION: v0.85.0          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
   WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
 
 jobs:
@@ -123,7 +123,7 @@ jobs:
       - name: What only warns, apart from the verdict (proposals only)
         id: line
         if: steps.any.outputs.any == 'true'
-        # As workline.yml's judge: every lens once when opened or marked
+        # As workline.yml's propose: every lens once when opened or marked
         # ready, the draft state on every run; on a draft,
         # no lens.
         env:
