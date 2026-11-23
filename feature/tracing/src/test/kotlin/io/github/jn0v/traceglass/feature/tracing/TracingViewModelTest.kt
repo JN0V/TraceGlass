@@ -358,9 +358,10 @@ class TracingViewModelTest {
             val center = Offset(540f, 960f)
             viewModel.onOverlayGesture(center, Offset(10f, 5f), 2f, 15f)
             viewModel.onOverlayGesture(center, Offset(20f, 10f), 0.5f, -5f)
-            // Offset: 10+20=30, 5+10=15
-            assertEquals(30f, viewModel.uiState.value.overlayOffset.x, 0.1f)
-            assertEquals(15f, viewModel.uiState.value.overlayOffset.y, 0.1f)
+            // Call 1: offset (10, 5). Call 2: the image centre is (550, 965), so the 0.5x zoom
+            // at (540, 960) moves it by (-10, -5) * 0.5 = (-5, -2.5) on top of the (20, 10) pan.
+            assertEquals(25f, viewModel.uiState.value.overlayOffset.x, 0.1f)
+            assertEquals(12.5f, viewModel.uiState.value.overlayOffset.y, 0.1f)
             // Scale: 2 * 0.5 = 1
             assertEquals(1f, viewModel.uiState.value.overlayScale, 0.001f)
             // Rotation: 15 + (-5) = 10
