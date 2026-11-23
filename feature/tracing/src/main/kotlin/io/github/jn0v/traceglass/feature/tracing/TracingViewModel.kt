@@ -13,6 +13,8 @@ import io.github.jn0v.traceglass.core.overlay.OverlayTransform
 import io.github.jn0v.traceglass.core.overlay.OverlayTransformCalculator
 import io.github.jn0v.traceglass.core.overlay.TrackingStateManager
 import io.github.jn0v.traceglass.core.overlay.TrackingStatus
+import io.github.jn0v.traceglass.core.session.MAX_BREAK_INTERVAL_MINUTES
+import io.github.jn0v.traceglass.core.session.MIN_BREAK_INTERVAL_MINUTES
 import io.github.jn0v.traceglass.core.session.SessionData
 import io.github.jn0v.traceglass.core.session.SessionRepository
 import io.github.jn0v.traceglass.core.session.SettingsRepository
@@ -692,7 +694,7 @@ class TracingViewModel(
     private fun restartBreakTimer() {
         breakTimerJob?.cancel()
         if (!breakReminderEnabled || !_uiState.value.isSessionActive) return
-        val intervalMs = breakReminderIntervalMinutes.coerceIn(1, 120).toLong() * 60_000L
+        val intervalMs = breakReminderIntervalMinutes.coerceIn(MIN_BREAK_INTERVAL_MINUTES, MAX_BREAK_INTERVAL_MINUTES).toLong() * 60_000L
         breakTimerJob = viewModelScope.launch {
             delay(intervalMs)
             _uiState.update { it.copy(showBreakReminder = true) }
