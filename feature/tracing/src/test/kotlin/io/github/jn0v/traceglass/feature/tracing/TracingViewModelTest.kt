@@ -340,6 +340,16 @@ class TracingViewModelTest {
         }
 
         @Test
+        fun `zoom with no drag pivots on the view centre`() {
+            val viewModel = createViewModel()
+            viewModel.setViewDimensions(1080f, 1920f)
+            // No drag: the image centre is the view centre (540, 960).
+            viewModel.onOverlayGesture(Offset(340f, 460f), Offset.Zero, 2f, 0f)
+            assertEquals(200f, viewModel.uiState.value.overlayOffset.x, 0.1f)
+            assertEquals(500f, viewModel.uiState.value.overlayOffset.y, 0.1f)
+        }
+
+        @Test
         fun `onOverlayGesture with off-center centroid adjusts offset for scale pivot`() {
             val viewModel = createViewModel()
             // Centroid at (340, 460) — offset from view center (540, 960) by (-200, -500)
