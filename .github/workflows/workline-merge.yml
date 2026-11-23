@@ -25,7 +25,7 @@ on:
 permissions: {}
 
 env:
-  WORKLINE_VERSION: v0.88.1          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_VERSION: v0.89.1          # a release of workline: update it to take a newer one (x-release-please-version)
 
 jobs:
   follow:
