@@ -1,0 +1,191 @@
+name: Release
+
+# A `v*` tag (v1.2.3) builds the release APK, signs it with the project key and
+# publishes a GitHub Release holding it. A manual run (workflow_dispatch) is a
+# dry run: it builds, signs and verifies, keeps the APK as a run artifact, and
+# publishes nothing.
+
+env:
+  OPENCV_VERSION: '4.10.0'
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, major.minor.patch (dry run, nothing is published)'
+        required: true
+        default: '0.0.1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      apk: ${{ steps.verify.outputs.apk }}
+
+    steps:
+      - name: Check signing secrets
+        env:
+          TRACEGLASS_KEYSTORE_B64: ${{ secrets.TRACEGLASS_KEYSTORE_B64 }}
+          TRACEGLASS_KEYSTORE_PASSWORD: ${{ secrets.TRACEGLASS_KEYSTORE_PASSWORD }}
+          TRACEGLASS_KEY_ALIAS: ${{ secrets.TRACEGLASS_KEY_ALIAS }}
+          TRACEGLASS_KEY_PASSWORD: ${{ secrets.TRACEGLASS_KEY_PASSWORD }}
+        run: |
+          missing=""
+          for name in TRACEGLASS_KEYSTORE_B64 TRACEGLASS_KEYSTORE_PASSWORD TRACEGLASS_KEY_ALIAS TRACEGLASS_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Release signing secret missing:$missing. No APK is built nor published."
+            exit 1
+          fi
+
+      - name: Read the version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$INPUT_VERSION"
+          fi
+          if ! [[ "$version" =~ ^[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+            echo "::error::Version '$version' is not major.minor.patch, each part 0..99 (tag v1.2.3)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;34.0.0 ndk;27.2.12479018 cmake;3.31.5'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Cache OpenCV SDK
+        id: cache-opencv
+        uses: actions/cache@v4
+        with:
+          path: sdk/OpenCV-android-sdk
+          key: opencv-${{ env.OPENCV_VERSION }}-android-sdk
+
+      - name: Download OpenCV Android SDK
+        if: steps.cache-opencv.outputs.cache-hit != 'true'
+        env:
+          OPENCV_SHA256: '464d55abe64b53af3aeb73197cf4620535abd909916d06e6a8b7c32712013966'
+        run: |
+          mkdir -p sdk
+          curl -sL "https://github.com/opencv/opencv/releases/download/${OPENCV_VERSION}/opencv-${OPENCV_VERSION}-android-sdk.zip" -o "$RUNNER_TEMP/opencv-sdk.zip"
+          echo "${OPENCV_SHA256}  $RUNNER_TEMP/opencv-sdk.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/opencv-sdk.zip" -d sdk/
+          rm "$RUNNER_TEMP/opencv-sdk.zip"
+
+      - name: Decode the keystore
+        env:
+          TRACEGLASS_KEYSTORE_B64: ${{ secrets.TRACEGLASS_KEYSTORE_B64 }}
+        run: |
+          umask 077
+          printf '%s' "$TRACEGLASS_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/traceglass-release.jks"
+          echo "TRACEGLASS_KEYSTORE_FILE=$RUNNER_TEMP/traceglass-release.jks" >> "$GITHUB_ENV"
+
+      - name: Build release
+        env:
+          TRACEGLASS_VERSION_NAME: ${{ steps.version.outputs.version }}
+          TRACEGLASS_KEYSTORE_PASSWORD: ${{ secrets.TRACEGLASS_KEYSTORE_PASSWORD }}
+          TRACEGLASS_KEY_ALIAS: ${{ secrets.TRACEGLASS_KEY_ALIAS }}
+          TRACEGLASS_KEY_PASSWORD: ${{ secrets.TRACEGLASS_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Verify the signature and the version
+        id: verify
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          built=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$built" ]; then
+            echo "::error::No signed release APK at $built; nothing is published."
+            ls -l app/build/outputs/apk/release/ || true
+            exit 1
+          fi
+          tools="$ANDROID_HOME/build-tools/34.0.0"
+          "$tools/apksigner" verify --verbose --print-certs "$built"
+          badging="$("$tools/aapt" dump badging "$built" | head -n 1)"
+          echo "$badging"
+          if ! grep -q "versionName='$VERSION'" <<< "$badging"; then
+            echo "::error::The APK's versionName does not match $VERSION."
+            exit 1
+          fi
+          apk="traceglass-$VERSION.apk"
+          mkdir -p dist
+          cp "$built" "dist/$apk"
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: traceglass-release-apk
+          path: dist/${{ steps.verify.outputs.apk }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Delete the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/traceglass-release.jks"
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Fetch the APK
+        uses: actions/download-artifact@v4
+        with:
+          name: traceglass-release-apk
+          path: dist
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK: ${{ needs.build.outputs.apk }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "dist/$APK" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --generate-notes
