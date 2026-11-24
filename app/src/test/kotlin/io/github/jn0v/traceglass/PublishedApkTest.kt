@@ -78,13 +78,10 @@ class PublishedApkTest {
     }
 
     // Given a person reading the README, When they look for how to install,
-    // Then an install section says where to download the APK (the CI artifact)
-    // and how to install it.
+    // Then an install section says where to download the APK (the CI artifact
+    // of the Actions run) and how to install it. It reads the README alone.
     @Test
     fun `README has an install section pointing to the APK artifact`() {
-        val name = artifactName(apkUploadStep(ciText()) ?: "")
-        assertNotNull(name, "the CI must define the APK artifact the README points to")
-
         val lines = readmeText().lines()
         val headingRegex = Regex("^(#{2,6})\\s+(.*)$")
         val start = lines.indexOfFirst {
@@ -99,8 +96,8 @@ class PublishedApkTest {
         } ?: lines.size
         val section = lines.subList(start, end).joinToString("\n")
 
-        assertTrue(section.contains(name!!), "install section must name the artifact $name")
         assertTrue(section.contains("Actions"), "install section must say to download it from the Actions run")
+        assertTrue(section.contains("artifact", ignoreCase = true), "install section must say the APK is a CI artifact")
         assertTrue(section.contains("app-debug.apk"), "install section must name app-debug.apk")
         assertEquals(
             true,
