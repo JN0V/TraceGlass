@@ -22,6 +22,25 @@ class ReleaseSigningTest {
 
     private fun appBuildScript(): String = File(repoRoot(), "app/build.gradle.kts").readText()
 
+    // Runs the project's own Gradle wrapper as a tag build would see it: the version
+    // tag set and none of the signing variables, whatever the machine has in its
+    // environment. Returns the exit code and the merged output.
+    private fun runTagBuildWithoutSecrets(vararg args: String): Pair<Int, String> {
+        val command = listOf(File(repoRoot(), "gradlew").absolutePath, "--offline", "--console=plain") + args
+        val builder = ProcessBuilder(command).directory(repoRoot()).redirectErrorStream(true)
+        val env = builder.environment()
+        listOf(
+            "TRACEGLASS_KEYSTORE_FILE",
+            "TRACEGLASS_KEYSTORE_PASSWORD",
+            "TRACEGLASS_KEY_ALIAS",
+            "TRACEGLASS_KEY_PASSWORD"
+        ).forEach { env.remove(it) }
+        env["TRACEGLASS_VERSION_NAME"] = "1.2.3"
+        val process = builder.start()
+        val output = process.inputStream.bufferedReader().readText()
+        return process.waitFor() to output
+    }
+
     // Given a `v*` tag pushed,
     // When the release workflow runs,
     // Then a GitHub Release holds a release APK signed with the project key.
@@ -126,5 +145,40 @@ class ReleaseSigningTest {
             !script.contains("""signingConfigs.getByName("debug")"""),
             "the release build must not fall back to the debug key"
         )
+    }
+
+    // Given the signing secrets are missing and a release tag is being built,
+    // When the release APK is assembled,
+    // Then the signing check is part of the build before the APK, and running it fails
+    // with a message naming each missing variable, so no unsigned APK is produced.
+    //
+    // This runs the real Gradle build rather than reading the script: the check task must
+    // exist, be wired in front of assembleRelease, and fail with the secrets missing.
+    @Test
+    fun `a tag build without secrets fails before any APK`() {
+        val (planCode, plan) = runTagBuildWithoutSecrets(":app:assembleRelease", "--dry-run")
+        assertTrue(planCode == 0, "the dry run of assembleRelease must succeed:\n$plan")
+        val checkAt = plan.indexOf(":app:verifyReleaseSigning")
+        val assembleAt = plan.indexOf(":app:assembleRelease")
+        assertTrue(checkAt >= 0, "assembleRelease of a tag build must run verifyReleaseSigning:\n$plan")
+        assertTrue(
+            assembleAt > checkAt,
+            "verifyReleaseSigning must come before assembleRelease in the plan:\n$plan"
+        )
+
+        val (code, output) = runTagBuildWithoutSecrets(":app:verifyReleaseSigning")
+        assertTrue(code != 0, "verifyReleaseSigning must fail when the signing secrets are missing:\n$output")
+        assertTrue(
+            output.contains("Release signing secret missing"),
+            "the failure must say a release signing secret is missing:\n$output"
+        )
+        listOf(
+            "TRACEGLASS_KEYSTORE_FILE",
+            "TRACEGLASS_KEYSTORE_PASSWORD",
+            "TRACEGLASS_KEY_ALIAS",
+            "TRACEGLASS_KEY_PASSWORD"
+        ).forEach { name ->
+            assertTrue(output.contains(name), "the failure message must name $name:\n$output")
+        }
     }
 }
