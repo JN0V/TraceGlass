@@ -77,22 +77,33 @@ android {
 
 }
 
-// No secrets, no APK: building a release artifact without the project key fails, so an
-// unsigned APK is never produced. Debug builds and unit tests are not concerned.
-gradle.taskGraph.whenReady {
-    val releaseBuild = allTasks.any {
-        it.project == project && Regex("^(assemble|bundle|package)Release$").matches(it.name)
+// No secrets, no APK: `verifyReleaseSigning` fails, naming each variable that is missing, and
+// every release artifact task of a tag build (TRACEGLASS_VERSION_NAME set) depends on it, so an
+// unsigned APK is never produced. Debug builds, unit tests and the plain CI build stay unaffected.
+val verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
+    group = "verification"
+    description = "Fails unless the four TRACEGLASS_* release signing variables are set."
+    val vars = listOf(
+        "TRACEGLASS_KEYSTORE_FILE" to keystoreFile,
+        "TRACEGLASS_KEYSTORE_PASSWORD" to keystorePassword,
+        "TRACEGLASS_KEY_ALIAS" to keyAlias,
+        "TRACEGLASS_KEY_PASSWORD" to keyPassword
+    )
+    doLast {
+        val missing = vars.filter { it.second == null }.map { it.first }
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "Release signing secret missing: ${missing.joinToString()}. Refusing to build an unsigned release APK."
+            )
+        }
     }
-    // Tag builds set TRACEGLASS_VERSION_NAME; the plain CI build check has no key and stays unsigned.
-    val tagBuild = System.getenv("TRACEGLASS_VERSION_NAME")?.isNotBlank() == true
-    if (releaseBuild && tagBuild && !hasReleaseKey) {
-        val missing = listOf(
-            "TRACEGLASS_KEYSTORE_FILE" to keystoreFile,
-            "TRACEGLASS_KEYSTORE_PASSWORD" to keystorePassword,
-            "TRACEGLASS_KEY_ALIAS" to keyAlias,
-            "TRACEGLASS_KEY_PASSWORD" to keyPassword
-        ).filter { it.second == null }.map { it.first }
-        throw GradleException("Release signing secret missing: ${missing.joinToString()}. Refusing to build an unsigned release APK.")
+}
+
+if (taggedVersionName != null) {
+    tasks.configureEach {
+        if (Regex("^(assemble|bundle|package)Release$").matches(name)) {
+            dependsOn(verifyReleaseSigning)
+        }
     }
 }
 
