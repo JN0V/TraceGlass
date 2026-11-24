@@ -71,6 +71,25 @@ android {
 
 }
 
+// No secrets, no APK: building a release artifact without the project key fails, so an
+// unsigned APK is never produced. Debug builds and unit tests are not concerned.
+gradle.taskGraph.whenReady {
+    val releaseBuild = allTasks.any {
+        it.project == project && Regex("^(assemble|bundle|package)Release$").matches(it.name)
+    }
+    // Tag builds set TRACEGLASS_VERSION_NAME; the plain CI build check has no key and stays unsigned.
+    val tagBuild = System.getenv("TRACEGLASS_VERSION_NAME")?.isNotBlank() == true
+    if (releaseBuild && tagBuild && !hasReleaseKey) {
+        val missing = listOf(
+            "TRACEGLASS_KEYSTORE_FILE" to keystoreFile,
+            "TRACEGLASS_KEYSTORE_PASSWORD" to keystorePassword,
+            "TRACEGLASS_KEY_ALIAS" to keyAlias,
+            "TRACEGLASS_KEY_PASSWORD" to keyPassword
+        ).filter { it.second == null }.map { it.first }
+        throw GradleException("Release signing secret missing: ${missing.joinToString()}. Refusing to build an unsigned release APK.")
+    }
+}
+
 tasks.whenTaskAdded {
     if (name.contains("ArtProfile")) {
         enabled = false
