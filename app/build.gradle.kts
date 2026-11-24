@@ -6,11 +6,17 @@ plugins {
 
 // The release version comes from the pushed tag (TRACEGLASS_VERSION_NAME, e.g. "1.2.3"
 // from tag v1.2.3): versionCode = major * 10000 + minor * 100 + patch, so it only goes up.
-val releaseVersionName: String = System.getenv("TRACEGLASS_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "0.1.0-dev"
+val taggedVersionName: String? = System.getenv("TRACEGLASS_VERSION_NAME")?.takeIf { it.isNotBlank() }
+val releaseVersionName: String = taggedVersionName ?: "0.1.0-dev"
 val releaseVersionCode: Int = run {
     val parts = releaseVersionName.substringBefore('-').split('.').map { it.toIntOrNull() }
     if (parts.size == 3 && parts.all { it != null && it in 0..99 }) {
         parts[0]!! * 10000 + parts[1]!! * 100 + parts[2]!!
+    } else if (taggedVersionName != null) {
+        throw GradleException(
+            "TRACEGLASS_VERSION_NAME '$taggedVersionName' is not major.minor.patch with each part 0..99; " +
+                "refusing to build a release whose versionCode would not go up."
+        )
     } else {
         1
     }
