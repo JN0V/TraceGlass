@@ -31,6 +31,11 @@ roles:
       # Lines of the files changed a lens reads whole (600 shipped): misses
       # sat outside the hunks.
       code-lines-max: 3000
+      # Whole files make a change take more calls: up to 4 parts, and the
+      # tokens of a run to match, as workline's own line has them (2 and
+      # 300k shipped). Caps, not a spend.
+      parts-max: 4
+      ai-max-tokens: 600000
 
 routing:
   # On a pull request, the committer and the documentalist, the tester's
