@@ -22,6 +22,20 @@ roles:
       # Its proof on the modules its code and the tests touch; the pull
       # request's CI builds, tests and lints every module.
       proof-command: './gradlew --console=plain $(echo {packages} | sed -E ''s#\./##g; s#/#:#g; s#([^ ]+)#:\1:testDebugUnitTest#g'')'
+  reviewer:
+    settings:
+      # A verified important finding of these lenses holds the merge: the
+      # owner was finding them after the line had them and let them pass.
+      # The other lenses warn.
+      ai-findings: {correctness: block, intent: block, tests: block}
+      # Lines of the files changed a lens reads whole (600 shipped): misses
+      # sat outside the hunks.
+      code-lines-max: 3000
+      # Whole files make a change take more calls: up to 4 parts, and the
+      # tokens of a run to match, as workline's own line has them (2 and
+      # 300k shipped). Caps, not a spend.
+      parts-max: 4
+      ai-max-tokens: 600000
 
 routing:
   # On a pull request, the committer and the documentalist, the tester's
