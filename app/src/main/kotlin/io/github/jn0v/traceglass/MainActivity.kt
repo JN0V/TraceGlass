@@ -48,7 +48,7 @@ private fun TraceGlassNavigation() {
     val detectionModeSelector: DetectionModeSelector = koinInject()
     // Keep the detector on the mode stored in the settings, whichever screen is showing.
     LaunchedEffect(onboardingRepository, detectionModeSelector) {
-        onboardingRepository.detectionMode.collect { detectionModeSelector.mode = it }
+        syncDetectionMode(onboardingRepository, detectionModeSelector)
     }
     val onboardingCompleted by onboardingRepository.isOnboardingCompleted
         .collectAsStateWithLifecycle(initialValue = null)
