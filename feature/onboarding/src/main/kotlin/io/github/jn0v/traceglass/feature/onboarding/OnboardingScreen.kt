@@ -97,10 +97,13 @@ fun OnboardingScreen(
                 0 -> WelcomePage()
                 1 -> TierSelectionPage(
                     selectedTier = uiState.selectedTier,
-                    onTierSelected = viewModel::onTierSelected
+                    onTierSelected = viewModel::onTierSelected,
+                    detectionMode = uiState.detectionMode,
+                    onDetectionModeSelected = viewModel::onDetectionModeSelected
                 )
                 2 -> MarkerPreparationPage(
                     selectedTier = uiState.selectedTier,
+                    detectionMode = uiState.detectionMode,
                     onViewGuide = onNavigateToGuide
                 )
             }

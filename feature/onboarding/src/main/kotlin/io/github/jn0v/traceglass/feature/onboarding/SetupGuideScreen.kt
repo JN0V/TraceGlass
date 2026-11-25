@@ -166,6 +166,15 @@ private fun MarkerGuideContent() {
             title = stringResource(R.string.guide_marker_step4_title),
             instructions = stringResource(R.string.guide_marker_step4_body)
         )
+        Text(
+            text = stringResource(R.string.guide_shapes_title),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.semantics { heading() }
+        )
+        Text(
+            text = stringResource(R.string.guide_shapes_body),
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
 

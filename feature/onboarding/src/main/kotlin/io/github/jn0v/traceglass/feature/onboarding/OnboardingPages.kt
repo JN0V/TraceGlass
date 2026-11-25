@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import io.github.jn0v.traceglass.core.cv.DetectionMode
 
 @Composable
 fun WelcomePage() {
@@ -47,7 +48,9 @@ fun WelcomePage() {
 @Composable
 fun TierSelectionPage(
     selectedTier: SetupTier,
-    onTierSelected: (SetupTier) -> Unit
+    onTierSelected: (SetupTier) -> Unit,
+    detectionMode: DetectionMode = DetectionMode.ARUCO,
+    onDetectionModeSelected: (DetectionMode) -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -88,12 +91,39 @@ fun TierSelectionPage(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.onboarding_mode_title),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center
+        )
+        Column(modifier = Modifier.semantics { selectableGroup() }) {
+            DetectionMode.entries.forEach { mode ->
+                val label = detectionModeLabel(mode)
+                FilterChip(
+                    selected = mode == detectionMode,
+                    onClick = { onDetectionModeSelected(mode) },
+                    label = { Text(label) },
+                    modifier = Modifier
+                        .padding(vertical = 4.dp)
+                        .semantics {
+                            contentDescription = if (mode == detectionMode) {
+                                "$label, selected"
+                            } else {
+                                label
+                            }
+                        }
+                )
+            }
+        }
     }
 }
 
 @Composable
 fun MarkerPreparationPage(
     selectedTier: SetupTier,
+    detectionMode: DetectionMode = DetectionMode.ARUCO,
     onViewGuide: () -> Unit = {}
 ) {
     Column(
@@ -110,7 +140,13 @@ fun MarkerPreparationPage(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = stringResource(markerInstructionsRes(selectedTier)),
+            text = stringResource(
+                if (detectionMode == DetectionMode.CUSTOM_SHAPES) {
+                    R.string.onboarding_markers_custom_shapes
+                } else {
+                    markerInstructionsRes(selectedTier)
+                }
+            ),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center
         )
@@ -127,6 +163,14 @@ private fun tierLabel(tier: SetupTier): String = stringResource(
         SetupTier.FULL_DIY -> R.string.onboarding_tier_full_diy
         SetupTier.SEMI_EQUIPPED -> R.string.onboarding_tier_semi_equipped
         SetupTier.FULL_KIT -> R.string.onboarding_tier_full_kit
+    }
+)
+
+@Composable
+private fun detectionModeLabel(mode: DetectionMode): String = stringResource(
+    when (mode) {
+        DetectionMode.ARUCO -> R.string.onboarding_mode_aruco
+        DetectionMode.CUSTOM_SHAPES -> R.string.onboarding_mode_custom_shapes
     }
 )
 
