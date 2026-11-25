@@ -1,5 +1,6 @@
 package io.github.jn0v.traceglass.feature.onboarding
 
+import io.github.jn0v.traceglass.core.cv.DetectionMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +15,9 @@ class FakeOnboardingRepository : OnboardingRepository {
 
     private val _selectedTier = MutableStateFlow<SetupTier?>(null)
     override val selectedTier: Flow<SetupTier?> = _selectedTier.asStateFlow()
+
+    private val _detectionMode = MutableStateFlow(DetectionMode.ARUCO)
+    override val detectionMode: Flow<DetectionMode> = _detectionMode.asStateFlow()
 
     var setCompletedCount: Int = 0
         private set
@@ -39,10 +43,15 @@ class FakeOnboardingRepository : OnboardingRepository {
         _selectedTier.value = tier
     }
 
+    override suspend fun setDetectionMode(mode: DetectionMode) {
+        _detectionMode.value = mode
+    }
+
     override suspend fun resetOnboarding() {
         resetCount++
         _completed.value = false
         _tooltipShown.value = false
         _selectedTier.value = null
+        _detectionMode.value = DetectionMode.ARUCO
     }
 }
