@@ -19,7 +19,7 @@ permissions: {}
 concurrency: {group: "workline-answer-${{ github.event.workflow_run.head_branch || inputs.branch }}", cancel-in-progress: false}
 
 env:
-  WORKLINE_VERSION: v0.90.0          # a release of workline: update it to take a newer one (x-release-please-version)
+  WORKLINE_VERSION: v0.91.0          # a release of workline: update it to take a newer one (x-release-please-version)
   WORKLINE_RUNS_DIR: ${{ github.workspace }}/.workline-runs
 
 jobs:
