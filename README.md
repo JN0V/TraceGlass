@@ -24,6 +24,14 @@ A free, open-source Android app that overlays a semi-transparent reference image
 - **Break reminders** — Configurable timer with notification tone
 - **Onboarding** — 3-page carousel + interactive camera walkthrough + setup guides
 
+## Install
+
+No Android tooling needed: every push to `main` publishes a debug APK.
+
+1. Open the [Actions tab](https://github.com/JN0V/TraceGlass/actions/workflows/ci.yml), pick the latest passing run on `main`.
+2. Download the `traceglass-debug-apk` artifact (kept 7 days) and unzip it to get `app-debug.apk`.
+3. Copy `app-debug.apk` to your phone, open the file and tap Install (allow installs from unknown sources if asked), or run `adb install app-debug.apk`.
+
 ## Build
 
 ```bash
