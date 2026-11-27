@@ -1,7 +1,9 @@
 package io.github.jn0v.traceglass.feature.onboarding
 
+import io.github.jn0v.traceglass.core.cv.DetectionMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -35,6 +37,35 @@ class OnboardingViewModelTest {
         val vm = OnboardingViewModel(repo)
         testDispatcher.scheduler.advanceUntilIdle()
         return vm
+    }
+
+    @Nested
+    inner class DetectionModeChoice {
+        @Test
+        fun `default mode is aruco`() {
+            assertEquals(DetectionMode.ARUCO, createViewModel().uiState.value.detectionMode)
+        }
+
+        @Test
+        fun `choosing custom shapes updates state and stores it`() {
+            val vm = createViewModel()
+
+            vm.onDetectionModeSelected(DetectionMode.CUSTOM_SHAPES)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(DetectionMode.CUSTOM_SHAPES, vm.uiState.value.detectionMode)
+            assertEquals(DetectionMode.CUSTOM_SHAPES, runBlockingFirst())
+        }
+
+        @Test
+        fun `stored mode is restored`() {
+            kotlinx.coroutines.runBlocking { repo.setDetectionMode(DetectionMode.CUSTOM_SHAPES) }
+
+            assertEquals(DetectionMode.CUSTOM_SHAPES, createViewModel().uiState.value.detectionMode)
+        }
+
+        private fun runBlockingFirst(): DetectionMode =
+            kotlinx.coroutines.runBlocking { repo.detectionMode.first() }
     }
 
     @Nested

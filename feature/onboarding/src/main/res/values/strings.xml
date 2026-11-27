@@ -24,6 +24,10 @@
     <string name="onboarding_markers_full_diy">Print four ArUco markers (IDs #0\u2013#3) at about 2\u00a0cm each. Tape them at the four corners of your drawing area, so your hands never cover them. Prop your phone about 25\u201330\u00a0cm above the surface so the camera sees all four markers.</string>
     <string name="onboarding_markers_semi_equipped">Print the ArUco marker sheet from the setup guide. Cut out markers #0\u2013#3, tape them at the four corners of your drawing area. Position your phone about 25\u201330\u00a0cm above so all markers stay visible while you draw.</string>
     <string name="onboarding_markers_full_kit">Print the ArUco marker sheet. Tape markers #0\u2013#3 at the four corners. Mount your phone on the stand about 25\u201330\u00a0cm above the surface \u2014 high enough to see all four markers, low enough to trace comfortably.</string>
+    <string name="onboarding_mode_title">How do you mark the corners?</string>
+    <string name="onboarding_mode_aruco">ArUco markers (default)</string>
+    <string name="onboarding_mode_custom_shapes">Custom shapes (experimental)</string>
+    <string name="onboarding_markers_custom_shapes">Experimental: draw four different solid shapes in dark ink on white paper, one at each corner of your drawing area, each at least about 1\u00a0cm across. Keep your hands off them and prop your phone about 25\u201330\u00a0cm above the surface so the camera sees all four shapes. Only these four marks should be on the sheet outside the area you trace.</string>
     <string name="onboarding_view_guide">View detailed setup guide</string>
 
     <!-- WalkthroughScreen -->
@@ -63,6 +67,8 @@
     <string name="guide_marker_step4_body">Make sure all four markers stay visible to the camera while you draw. Avoid covering them with your hand or paper.</string>
 
     <!-- MacGyverGuideContent -->
+    <string name="guide_shapes_title">Hand-drawn shapes (experimental)</string>
+    <string name="guide_shapes_body">No printer? Choose \"Custom shapes (experimental)\" during setup. Draw four different solid shapes (squares, triangles, circles\u2026) in dark ink on white paper, one at each corner of your drawing area, each at least about 1\u00a0cm across. Good light and strong contrast help. Tracking locks on only when exactly four shapes are seen.</string>
     <string name="guide_stand_title">Improvised Phone Stand</string>
     <string name="guide_stand_intro">No tripod? No problem. Use everyday objects to hold your phone about 25\u201330\u00a0cm above your drawing surface, camera pointing down.</string>
     <string name="guide_stand_glass_title">Glass of Water</string>

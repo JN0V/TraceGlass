@@ -2,6 +2,7 @@ package io.github.jn0v.traceglass.feature.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.jn0v.traceglass.core.cv.DetectionMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +23,8 @@ class OnboardingViewModel(
             if (savedTier != null) {
                 _uiState.update { it.copy(selectedTier = savedTier) }
             }
+            val savedMode = repository.detectionMode.first()
+            _uiState.update { it.copy(detectionMode = savedMode) }
         }
     }
 
@@ -33,6 +36,11 @@ class OnboardingViewModel(
     fun onTierSelected(tier: SetupTier) {
         _uiState.update { it.copy(selectedTier = tier) }
         viewModelScope.launch { repository.setSelectedTier(tier) }
+    }
+
+    fun onDetectionModeSelected(mode: DetectionMode) {
+        _uiState.update { it.copy(detectionMode = mode) }
+        viewModelScope.launch { repository.setDetectionMode(mode) }
     }
 
     fun onNextPage() {

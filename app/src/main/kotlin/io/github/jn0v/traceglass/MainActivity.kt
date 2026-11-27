@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import io.github.jn0v.traceglass.core.cv.DetectionModeSelector
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingMode
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingRepository
 import io.github.jn0v.traceglass.feature.onboarding.OnboardingScreen
@@ -43,6 +45,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun TraceGlassNavigation() {
     val onboardingRepository: OnboardingRepository = koinInject()
+    val detectionModeSelector: DetectionModeSelector = koinInject()
+    // Keep the detector on the mode stored in the settings, whichever screen is showing.
+    LaunchedEffect(onboardingRepository, detectionModeSelector) {
+        syncDetectionMode(onboardingRepository, detectionModeSelector)
+    }
     val onboardingCompleted by onboardingRepository.isOnboardingCompleted
         .collectAsStateWithLifecycle(initialValue = null)
 
